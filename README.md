@@ -1,2 +1,2 @@
 # SUSH
-Shippensburg University Shell
+SU Shell
