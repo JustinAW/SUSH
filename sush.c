@@ -18,7 +18,7 @@
 #include <sys/types.h>
 
 #ifndef BUFF_SIZE
-#define BUFF_SIZE 1024
+#define BUFF_SIZE 1025
 #endif
 
 /**
@@ -37,10 +37,11 @@ void read_sushrc ()
     // store full path to .sushrc
     const char *rcfile = strcat(tmpstr, "/.sushrc");
 
-    // Search for .sushrc in $HOME
+    /* Search for .sushrc in $HOME */
     DIR *dir;
     struct dirent *entry;
     int found = 0;
+    int length = 0;
     if ((dir = opendir(home)) != NULL) {
         while ((entry = readdir(dir)) != NULL) {
             if (!strcmp(entry->d_name, ".sushrc")) {
@@ -51,8 +52,19 @@ void read_sushrc ()
                     FILE *fp = fopen(rcfile, "r");
                     // read file until EOF is found (fgets() returns NULL)
                     while ((fgets(buf, BUFF_SIZE, fp)) != NULL) {
-                        // TODO call tokenizer here
-                        printf("Line read: %s", buf);
+                        length = strlen(buf);
+                        if (length == 1024) {
+                            if (buf[length-1] == '\n') {
+                                // TODO call tokenizer here
+                                printf("Line read: %s", buf);
+                            } else {
+                                while (fgetc(fp) != '\n') { }
+                                fprintf(stderr, "maxlen 1023, skipping...\n");
+                            }
+                        } else {
+                            // TODO call tokenizer here
+                            printf("Line read: %s", buf);
+                        }
                     }
                     fclose(fp); // close the file
                 } else {
