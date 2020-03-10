@@ -1,3 +1,15 @@
+/************************************************
+ *       Shippensburg University Shell          *
+ *                tokenizer.c                   *
+ ************************************************
+ * tokenize takes a string as input and then    *
+ * separates the string into tokens that can    *
+ * further be used to execute shell commands    *
+ ************************************************
+ * Author: Justin Weigle                        *
+ * Edited: 10 Mar 2020                          *
+ ************************************************/
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

@@ -1,13 +1,13 @@
 /************************************************
- *                   sush.c                     *
  *       Shippensburg University Shell          *
+ *                   sush.c                     *
  ************************************************
  * Linux shell command interpreter.             *
  * For now just reads a .sushrc file and prints *
  *  to stdout                                   *
  ************************************************
  * Author: Justin Weigle                        *
- * Edited: 07 Mar 2020                          *
+ * Edited: 08 Mar 2020                          *
  ************************************************/
 
 #include <stdio.h>
