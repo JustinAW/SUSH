@@ -14,8 +14,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
-#include "sush.h"
-#include "tokenizer.h"
+#include "../includes/sush.h"
+#include "../includes/tokenizer.h"
 
 typedef enum {
     Init_State,

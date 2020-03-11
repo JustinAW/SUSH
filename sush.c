@@ -11,9 +11,9 @@
  ************************************************/
 
 #include <stdio.h>
-#include "sush.h"
-#include "tokenizer.h"
-#include "rcreader.h"
+#include "includes/sush.h"
+#include "includes/tokenizer.h"
+#include "includes/rcreader.h"
 
 int main (int argc, char **argv)
 {

@@ -17,9 +17,9 @@
 #include <unistd.h>
 #include <dirent.h>
 #include <sys/types.h>
-#include "sush.h"
-#include "tokenizer.h"
-#include "rcreader.h"
+#include "../includes/sush.h"
+#include "../includes/tokenizer.h"
+#include "../includes/rcreader.h"
 
 void print_and_free (tok_node *head)
 {
