@@ -7,7 +7,7 @@
  *  to stdout                                   *
  ************************************************
  * Author: Justin Weigle                        *
- * Edited: 08 Mar 2020                          *
+ * Edited: 11 Mar 2020                          *
  ************************************************/
 
 #include <stdio.h>
@@ -16,6 +16,7 @@
 #include <unistd.h>
 #include <dirent.h>
 #include <sys/types.h>
+#include "tokenizer.h"
 
 #ifndef BUFF_SIZE
 #define BUFF_SIZE 1025
