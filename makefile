@@ -1,15 +1,15 @@
 CC= gcc
 CFLAGS= -g -Wall
-TARGETS= sush
-OBJS= sush.o
+TARGET= sush
+OBJS= sush.o tokenizer.o rcreader.o
 
-all: $(TARGETS)
+all: $(TARGET)
 
 sush: $(OBJS)
 	$(CC) $(CFLAGS) -o sush $(OBJS)
 
-run: $(TARGETS)
+run: $(TARGET)
 	./sush
 
 clean:
-	rm -f *.o $(TARGETS)
+	rm -f *.o $(TARGET)

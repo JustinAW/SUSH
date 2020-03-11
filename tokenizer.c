@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
+#include "sush.h"
 #include "tokenizer.h"
 
 typedef enum {
@@ -51,8 +52,9 @@ tok_node* tokenize (char *input)
              *  if space          : nothing
              *  if ascii          : letter     */
             case Init_State:
-//                printf("in init\n");
-                if (ch == '"') {
+                if (ch == '\n') {
+                    return NULL;
+                } else if (ch == '"') {
                     State = Double_Quote_State;
                     start = i+1;
                 } else if (ch == '\'') {
@@ -63,7 +65,7 @@ tok_node* tokenize (char *input)
                     error_free(&head);;
                     return NULL;
                 } else if (ch == ' ') {
-                } else if (32 <= ch <= 127) { //ascii vals
+                } else if (32 <= ch && ch <= 127) { //ascii vals
                     State = Letter_State;
                     start = i;
                 } else {
@@ -77,8 +79,10 @@ tok_node* tokenize (char *input)
              *  if ascii          : nothing
              *  if next == \n     : save string & exit     */
             case Letter_State:
-//                printf("in letter\n");
-                if (ch == '"') {
+                if (ch == '\n') {
+                    end = i;
+                    save_string(start, end, input, &head, 0);
+                } else if (ch == '"') {
                     State = Double_Quote_State;
                     save_string(start, end, input, &head, 0);
                     start = i+1;
@@ -96,11 +100,7 @@ tok_node* tokenize (char *input)
                     State = Blank_State;
                     end = i;
                     save_string(start, end, input, &head, 0);
-                } else if (32 <= ch <= 127) {
-                    if (ch == '\n') {
-                        end = i;
-                        save_string(start, end, input, &head, 0);
-                    }
+                } else if (32 <= ch && ch <= 127) {
                 } else {
                     fprintf(stderr, "Unrecognized character %c\n", ch);
                     error_free(&head);;
@@ -111,8 +111,10 @@ tok_node* tokenize (char *input)
              *  if space          : nothing
              *  if ascii          : letter     */
             case Blank_State:
-//                printf("in blank\n");
-                if (ch == '"') {
+                if (ch == '\n') {
+                    end = i;
+                    save_string(start, end, input, &head, 0);
+                } else if (ch == '"') {
                     State = Double_Quote_State;
                     start = i+1;
                 } else if (ch == '\'') {
@@ -123,7 +125,7 @@ tok_node* tokenize (char *input)
                     start = i;
                     end = i+1;
                 } else if (ch == ' ') {
-                } else if (32 <= ch <= 127) {
+                } else if (32 <= ch && ch <= 127) {
                     State = Letter_State;
                     start = i;
                 } else {
@@ -136,7 +138,6 @@ tok_node* tokenize (char *input)
              *  if space          : eat spaces, nom nom
              *  if ascii          : save string & letter     */
             case Redirect_State:
-//                printf("in redirect\n");
                 if (ch == '"') {
                     State = Double_Quote_State;
                     save_string(start, end, input, &head, 1);
@@ -145,7 +146,7 @@ tok_node* tokenize (char *input)
                     State = Single_Quote_State;
                     save_string(start, end, input, &head, 1);
                     start = i+1;
-                } else if (input[i] == '\n') {
+                } else if (ch == '\n') {
                     fprintf(stderr, "Can't have redirect at end\n");
                     error_free(&head);;
                     return NULL;
@@ -163,12 +164,12 @@ tok_node* tokenize (char *input)
                         end = i+1;
                     } else {
                         fprintf(stderr,
-                            "Cannot have spaces between >\n", ch);
+                            "Cannot have spaces between >\n");
                         error_free(&head);;
                         return NULL;
                     }
                 } else if (ch == ' ') {
-                } else if (32 <= ch <= 127) {
+                } else if (32 <= ch && ch <= 127) {
                     State = Letter_State;
                     save_string(start, end, input, &head, 1);
                     start = i;
@@ -183,7 +184,6 @@ tok_node* tokenize (char *input)
              *  After end quote found, check next char to
              *  decide which state to change to             */
             case Single_Quote_State:
-//                printf("in single quote\n");
                 if (ch == '\'') {
                     end = i;
                     save_string(start, end, input, &head, 0);
@@ -200,8 +200,9 @@ tok_node* tokenize (char *input)
                         end = i+1;
                     } else if (ch == ' ') {
                         State = Blank_State;
-                    } else if (32 <= ch <= 127) {
+                    } else if (32 <= ch && ch <= 127) {
                         State = Letter_State;
+                    } else if (ch == '\n') {
                     } else {
                         fprintf(stderr, "Unrecognized character %c\n", ch);
                         error_free(&head);;
@@ -215,7 +216,6 @@ tok_node* tokenize (char *input)
                 break;
             /** see single quote explanation    */
             case Double_Quote_State:
-//                printf("in double quote\n");
                 if (ch == '"') {
                     end = i;
                     save_string(start, end, input, &head, 0);
@@ -232,8 +232,9 @@ tok_node* tokenize (char *input)
                         end = i+1;
                     } else if (ch == ' ') {
                         State = Blank_State;
-                    } else if (32 <= ch <= 127) {
+                    } else if (32 <= ch && ch <= 127) {
                         State = Letter_State;
+                    } else if (ch == '\n') {
                     } else {
                         fprintf(stderr, "Unrecognized character %c\n", ch);
                         error_free(&head);;
@@ -285,13 +286,10 @@ void save_string (int start, int end, char *input, tok_node **head, int spec)
 void error_free (tok_node **head)
 {
     tok_node *temp = *head;
-//    int j = 1;
-    while (*head != NULL) {
-//        printf("deleting node %d\n", j);
-        temp = (*head)->next;
-        free(*head);
-        *head = temp;
-//        j++;
+    while (temp != NULL) {
+        *head = (*head)->next;
+        free(temp);
+        temp = *head;
     }
     return;
 }
@@ -300,33 +298,31 @@ void error_free (tok_node **head)
  * exemplifies how to use the tokenizer and then
  * free up the memory
  */
-int main (int argc, char **argv)
-{
-    /* get user input */
-    char userin[1025];
-    fgets(userin, 1025, stdin);
-
-    /* get tokenized input */
-    tok_node *tok_input;
-    tok_input = tokenize(userin);
-
-    /* print the tokenized input */
-    tok_node *list = tok_input;
-    while (list != NULL) {
-        printf("%s \t: %d\n", list->token, list->special);
-        list = list->next;
-    }
-
-    /* free the nodes */
-    list = tok_input;
-    int j = 1;
-    while (tok_input != NULL) {
-        printf("deleting node %d\n", j);
-        list = tok_input->next;
-        free(tok_input);
-        tok_input = list;
-        j++;
-    }
-
-    return 0;
-}
+//int main (int argc, char **argv)
+//{
+//    /* get user input */
+//    char userin[BUFF_SIZE];
+//    printf("Input something to be tokenized\n");
+//    fgets(userin, BUFF_SIZE, stdin);
+//
+//    /* get tokenized input */
+//    tok_node *tok_input;
+//    tok_input = tokenize(userin);
+//
+//    /* print the tokenized input */
+//    tok_node *list = tok_input;
+//    while (list != NULL) {
+//        printf("%s \t: %d\n", list->token, list->special);
+//        list = list->next;
+//    }
+//
+//    /* free the nodes */
+//    list = tok_input;
+//    while (tok_input != NULL) {
+//        list = tok_input->next;
+//        free(tok_input);
+//        tok_input = list;
+//    }
+//
+//    return 0;
+//}
