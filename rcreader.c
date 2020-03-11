@@ -1,3 +1,16 @@
+/************************************************
+ *       Shippensburg University Shell          *
+ *                 rcreader.c                   *
+ ************************************************
+ * rcreader opens a .sushrc file in the user's  *
+ * home directory as long as it is executable,  *
+ * and then it calls tokenizer to split it into *
+ * tokens to be passed to the executor          *
+ ************************************************
+ * Author: Justin Weigle                        *
+ * Edited: 11 Mar 2020                          *
+ ************************************************/
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
