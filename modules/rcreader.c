@@ -8,7 +8,7 @@
  * tokens to be passed to the executor          *
  ************************************************
  * Author: Justin Weigle                        *
- * Edited: 11 Mar 2020                          *
+ * Edited: 14 Mar 2020                          *
  ************************************************/
 
 #include <stdio.h>
@@ -21,24 +21,7 @@
 #include "../includes/tokenizer.h"
 #include "../includes/rcreader.h"
 
-void print_and_free (tok_node *head)
-{
-    tok_node *list = head;
-    while (list != NULL) {
-        printf("%s \t: %d\n", list->token,
-               list->special);
-        list = list->next;
-    }
-    list = head;
-    int j = 1;
-    while (list != NULL) {
-        printf("deleting node %d\n", j);
-        head = head->next;
-        free(list);
-        list = head;
-        j++;
-    }
-}
+static void print_and_free (tok_node **);
 
 /**
  * Opens the user's home directory using the $HOME environment
@@ -76,7 +59,7 @@ void read_sushrc ()
                             if (buf[length-1] == '\n') {
                                 // TODO call executor here
                                 tok_node *head = tokenize(buf);
-                                print_and_free(head); //instead of this
+                                print_and_free(&head); //instead of this
                             } else {
                                 while (fgetc(fp) != '\n') { }
                                 fprintf(stderr, "maxlen 1023, skipping...\n");
@@ -84,7 +67,7 @@ void read_sushrc ()
                         } else {
                             // TODO call executor here
                             tok_node *head = tokenize(buf);
-                            print_and_free(head); //instead of this
+                            print_and_free(&head); //instead of this
                         }
                     }
                     fclose(fp); // close the file
@@ -99,5 +82,20 @@ void read_sushrc ()
         closedir(dir);
     } else {
         perror("In read_sushrc() - Could not open $HOME ");
+    }
+}
+
+static void print_and_free (tok_node **head)
+{
+    tok_node *list = *head;
+    while (list != NULL) {
+        printf("%d:%s\n", list->special, list->token);
+        list = list->next;
+    }
+    list = *head;
+    while (list != NULL) {
+        *head = (*head)->next;
+        free(list);
+        list = *head;
     }
 }

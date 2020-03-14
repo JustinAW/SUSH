@@ -7,7 +7,7 @@
  * further be used to execute shell commands    *
  ************************************************
  * Author: Justin Weigle                        *
- * Edited: 11 Mar 2020                          *
+ * Edited: 14 Mar 2020                          *
  ************************************************/
 
 #include <stdio.h>
@@ -26,8 +26,8 @@ typedef enum {
     Double_Quote_State,
 } Token_Sys_State;
 
-void save_string (int, int, char*, tok_node**, int);
-void error_free (tok_node**);
+static void save_string (char*, tok_node**, int);
+static void error_free_ll (tok_node **);
 
 /**
  * Uses state machine to tokenize a user's input into appropriate
@@ -41,209 +41,230 @@ tok_node* tokenize (char *input)
         return NULL;
     }
 
+    char token[length];
     tok_node *head = NULL;
     char ch;
-    int start, end, i;
     Token_Sys_State State = Init_State;
-    for(i = 0; i < length; i++) {
+
+    for(int i = 0, j = 0; i < length; i++) {
         ch = input[i];
         switch (State) {
-            /** if redirect found : error
-             *  if space          : nothing
-             *  if ascii          : letter     */
+            /* Should only change for quotes or letters.
+             * Save ch if letter */
             case Init_State:
                 if (ch == '\n') {
                     return NULL;
                 } else if (ch == '"') {
                     State = Double_Quote_State;
-                    start = i+1;
                 } else if (ch == '\'') {
                     State = Single_Quote_State;
-                    start = i+1;
                 } else if (ch == '<' || ch == '>' || ch == '|') {
                     fprintf(stderr, "Need input before redirect or pipe\n");
-                    error_free(&head);;
                     return NULL;
                 } else if (ch == ' ') {
-                } else if (32 <= ch && ch <= 127) { //ascii vals
+                } else if (32 <= ch && ch <= 127) {
                     State = Letter_State;
-                    start = i;
+                    token[j] = ch;
+                    j++;
                 } else {
                     fprintf(stderr, "Unrecognized character %c\n", ch);
-                    error_free(&head);;
                     return NULL;
                 }
                 break;
-            /** if redirect found : save string & redirect
-             *  if space          : save string & blank
-             *  if ascii          : nothing
-             *  if next == \n     : save string & exit     */
+            /* Change for everything except letters.
+             * Save ch for letters only.
+             * Save string for redirect and newline */
             case Letter_State:
                 if (ch == '\n') {
-                    end = i;
-                    save_string(start, end, input, &head, 0);
+                    token[j] = '\0';
+                    save_string(token, &head, 0);
                 } else if (ch == '"') {
                     State = Double_Quote_State;
-                    save_string(start, end, input, &head, 0);
-                    start = i+1;
                 } else if (ch == '\'') {
                     State = Single_Quote_State;
-                    save_string(start, end, input, &head, 0);
-                    start = i+1;
                 } else if (ch == '<' || ch == '>' || ch == '|') {
                     State = Redirect_State;
-                    end = i;
-                    save_string(start, end, input, &head, 0);
-                    start = i;
-                    end = i+1;
+                    token[j] = '\0';
+                    save_string(token, &head, 0);
+                    token[0] = ch;
+                    j = 1;
                 } else if (ch == ' ') {
                     State = Blank_State;
-                    end = i;
-                    save_string(start, end, input, &head, 0);
+                    token[j] = '\0';
+                    save_string(token, &head, 0);
+                    j = 0;
                 } else if (32 <= ch && ch <= 127) {
+                    token[j] = ch;
+                    j++;
                 } else {
                     fprintf(stderr, "Unrecognized character %c\n", ch);
-                    error_free(&head);;
+                    error_free_ll(&head);;
                     return NULL;
                 }
                 break;
-            /** if redirect found : redirect
-             *  if space          : nothing
-             *  if ascii          : letter     */
+            /* Change for everything except blanks.
+             * Save ch for letters and redirect */
             case Blank_State:
                 if (ch == '\n') {
-                    end = i;
-                    save_string(start, end, input, &head, 0);
                 } else if (ch == '"') {
                     State = Double_Quote_State;
-                    start = i+1;
                 } else if (ch == '\'') {
                     State = Single_Quote_State;
-                    start = i+1;
                 } else if (ch == '<' || ch == '>' || ch == '|') {
                     State = Redirect_State;
-                    start = i;
-                    end = i+1;
+                    token[j] = ch;
+                    j++;
                 } else if (ch == ' ') {
                 } else if (32 <= ch && ch <= 127) {
                     State = Letter_State;
-                    start = i;
+                    token[j] = ch;
+                    j++;
                 } else {
                     fprintf(stderr, "Unrecognized character %c\n", ch);
-                    error_free(&head);;
+                    error_free_ll(&head);
                     return NULL;
                 }
                 break;
-            /** if redirect found : error if prev not >
-             *  if space          : eat spaces, nom nom
-             *  if ascii          : save string & letter     */
+            /* save ch for another > if >.
+             * error on any other redirect or newline
+             * save string and change for anything else
+             * */
             case Redirect_State:
                 if (ch == '"') {
                     State = Double_Quote_State;
-                    save_string(start, end, input, &head, 1);
-                    start = i+1;
+                    token[j] = '\0';
+                    save_string(token, &head, 1);
+                    j = 0;
                 } else if (ch == '\'') {
                     State = Single_Quote_State;
-                    save_string(start, end, input, &head, 1);
-                    start = i+1;
+                    token[j] = '\0';
+                    save_string(token, &head, 1);
+                    j = 0;
                 } else if (ch == '\n') {
-                    fprintf(stderr, "Can't have redirect at end\n");
-                    error_free(&head);;
+                    fprintf(stderr, "Can't have redirect at end of input\n");
+                    error_free_ll(&head);;
                     return NULL;
                 } else if (ch == '<' || ch == '|') {
-                    fprintf(stderr, "%c not valid after %c\n", ch, input[i-1]);
-                    error_free(&head);;
+                    fprintf(stderr, "%c not valid after >\n", ch);
+                    error_free_ll(&head);;
                     return NULL;
                 } else if (ch == '>') {
                     if (input[i-1] == '>') {
                         if (input[i+1] == '>') {
                             fprintf(stderr, "Too many redirects in a row\n");
-                            error_free(&head);;
+                            error_free_ll(&head);;
                             return NULL;
                         }
-                        end = i+1;
+                        token[j] = ch;
+                        j++;
                     } else {
                         fprintf(stderr,
                             "Cannot have spaces between >\n");
-                        error_free(&head);;
+                        error_free_ll(&head);;
                         return NULL;
                     }
                 } else if (ch == ' ') {
                 } else if (32 <= ch && ch <= 127) {
                     State = Letter_State;
-                    save_string(start, end, input, &head, 1);
-                    start = i;
+                    token[j] = '\0';
+                    save_string(token, &head, 1);
+                    token[0] = ch;
+                    j = 1;
                 } else {
                     fprintf(stderr, "Unrecognized character %c\n", ch);
-                    error_free(&head);;
+                    error_free_ll(&head);;
                     return NULL;
                 }
                 break;
             /** everything is treated as plaintext until
-             *  the next single quote, then save string.
+             *  the next single quote other than escaped chars.
              *  After end quote found, check next char to
              *  decide which state to change to             */
             case Single_Quote_State:
                 if (ch == '\'') {
-                    end = i;
-                    save_string(start, end, input, &head, 0);
-                    i++; // only way to handle possible two quotes in a row
-                    start = i;
+                    i++; // check next character
                     ch = input[i];
                     if (ch == '"') {
-                        start = i+1;
                         State = Double_Quote_State;
                     } else if (ch == '\'') {
-                        start = i+1; //and stay in single quote state
                     } else if (ch == '<' || ch == '>' || ch == '|') {
                         State = Redirect_State;
-                        end = i+1;
+                        token[j] = '\0';
+                        save_string(token, &head, 0);
+                        token[0] = ch;
+                        j = 1;
                     } else if (ch == ' ') {
                         State = Blank_State;
+                        token[j] = '\0';
+                        save_string(token, &head, 0);
+                        j = 0;
                     } else if (32 <= ch && ch <= 127) {
                         State = Letter_State;
+                        token[j] = ch;
+                        j++;
                     } else if (ch == '\n') {
+                        token[j] = '\0';
+                        save_string(token, &head, 0);
                     } else {
                         fprintf(stderr, "Unrecognized character %c\n", ch);
-                        error_free(&head);;
+                        error_free_ll(&head);;
                         return NULL;
                     }
                 } else if (ch == '\n') {
                     fprintf(stderr, "Quote never closed \'\n");
-                    error_free(&head);;
+                    error_free_ll(&head);;
                     return NULL;
+                } else if (ch == '\\') {
+                    i++;
+                    token[j] = input[i];
+                    j++;
+                } else {
+                    token[j] = ch;
+                    j++;
                 }
                 break;
             /** see single quote explanation    */
             case Double_Quote_State:
                 if (ch == '"') {
-                    end = i;
-                    save_string(start, end, input, &head, 0);
-                    i++; // only way to handle possible two quotes in a row
-                    start = i;
+                    i++; // check next character
                     ch = input[i];
                     if (ch == '\'') {
-                        start = i+1;
                         State = Single_Quote_State;
                     } else if (ch == '"') {
-                        start = i+1; //and stay in double quote state
                     } else if (ch == '<' || ch == '>' || ch == '|') {
                         State = Redirect_State;
-                        end = i+1;
+                        token[j] = '\0';
+                        save_string(token, &head, 0);
+                        token[0] = ch;
+                        j = 1;
                     } else if (ch == ' ') {
                         State = Blank_State;
+                        token[j] = '\0';
+                        save_string(token, &head, 0);
+                        j = 0;
                     } else if (32 <= ch && ch <= 127) {
                         State = Letter_State;
+                        token[j] = ch;
+                        j++;
                     } else if (ch == '\n') {
+                        token[j] = '\0';
+                        save_string(token, &head, 0);
                     } else {
                         fprintf(stderr, "Unrecognized character %c\n", ch);
-                        error_free(&head);;
+                        error_free_ll(&head);;
                         return NULL;
                     }
                 } else if (ch == '\n') {
                     fprintf(stderr, "Quote never closed \"\n");
-                    error_free(&head);;
+                    error_free_ll(&head);;
                     return NULL;
+                } else if (ch == '\\') {
+                    i++;
+                    token[j] = input[i];
+                    j++;
+                } else {
+                    token[j] = ch;
+                    j++;
                 }
                 break;
             default:
@@ -254,24 +275,25 @@ tok_node* tokenize (char *input)
 }
 
 /**
- * Inserts a new node at the end of the linked list pointed to
- * by head with the string in input between start(inclusive) and
- * end(exclusive)
- */
-void save_string (int start, int end, char *input, tok_node **head, int spec)
+ * Inserts a new node at the end of the linked list pointed to by head
+ * with the given string token and marks whether it is a special
+ * token or not based on spec */
+static void save_string (char *token, tok_node **head, int spec)
 {
+    // TODO in this function: error checking
+    tok_node *list = *head;
     tok_node *t_node = malloc(sizeof(tok_node)); // make new node
-    int length = end - start;
+    int length = strlen(token);
     t_node->token = malloc(sizeof(char)*length+1); // make space for token
-    strncpy(t_node->token, &input[start], length+1); // put token in node
-    t_node->token[length] = '\0'; // strncpy doesn't null terminate
+    strncpy(t_node->token, token, length+1); // put token in node
+    t_node->token[length] = '\0'; // in case strncpy doesn't null terminate
     t_node->special = spec; // set if token is special
     t_node->next = NULL; // set next to NULL, node is going at the end
+
     if (*head == NULL) { // if head is NULL, new node is head
         *head = t_node;
         return;
     } else { // otherwise insert node at the end
-        tok_node *list = *head;
         while (list->next != NULL) {
             list = list->next;
         }
@@ -283,7 +305,7 @@ void save_string (int start, int end, char *input, tok_node **head, int spec)
 /**
  * called when an error occurs to free up memory
  */
-void error_free (tok_node **head)
+static void error_free_ll (tok_node **head)
 {
     tok_node *temp = *head;
     while (temp != NULL) {
