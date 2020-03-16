@@ -7,7 +7,7 @@
  * further be used to execute shell commands    *
  ************************************************
  * Author: Justin Weigle                        *
- * Edited: 14 Mar 2020                          *
+ * Edited: 16 Mar 2020                          *
  ************************************************/
 
 #include <stdio.h>
@@ -27,7 +27,6 @@ typedef enum {
 } Token_Sys_State;
 
 static void save_string (char*, tok_node**, int);
-static void error_free_ll (tok_node**);
 
 /**
  * Uses state machine to tokenize a user's input into appropriate
@@ -98,7 +97,7 @@ tok_node* tokenize (char *input)
                     j++;
                 } else {
                     fprintf(stderr, "Unrecognized character %c\n", ch);
-                    error_free_ll(&head);;
+                    free_tokens(head);;
                     return NULL;
                 }
                 break;
@@ -121,7 +120,7 @@ tok_node* tokenize (char *input)
                     j++;
                 } else {
                     fprintf(stderr, "Unrecognized character %c\n", ch);
-                    error_free_ll(&head);
+                    free_tokens(head);
                     return NULL;
                 }
                 break;
@@ -142,17 +141,17 @@ tok_node* tokenize (char *input)
                     j = 0;
                 } else if (ch == '\n') {
                     fprintf(stderr, "Can't have redirect at end of input\n");
-                    error_free_ll(&head);;
+                    free_tokens(head);;
                     return NULL;
                 } else if (ch == '<' || ch == '|') {
                     fprintf(stderr, "%c not valid after >\n", ch);
-                    error_free_ll(&head);;
+                    free_tokens(head);;
                     return NULL;
                 } else if (ch == '>') {
                     if (input[i-1] == '>') {
                         if (input[i+1] == '>') {
                             fprintf(stderr, "Too many redirects in a row\n");
-                            error_free_ll(&head);;
+                            free_tokens(head);;
                             return NULL;
                         }
                         token[j] = ch;
@@ -160,7 +159,7 @@ tok_node* tokenize (char *input)
                     } else {
                         fprintf(stderr,
                             "Cannot have spaces between >\n");
-                        error_free_ll(&head);;
+                        free_tokens(head);;
                         return NULL;
                     }
                 } else if (ch == ' ') {
@@ -172,7 +171,7 @@ tok_node* tokenize (char *input)
                     j = 1;
                 } else {
                     fprintf(stderr, "Unrecognized character %c\n", ch);
-                    error_free_ll(&head);;
+                    free_tokens(head);;
                     return NULL;
                 }
                 break;
@@ -207,12 +206,12 @@ tok_node* tokenize (char *input)
                         save_string(token, &head, 0);
                     } else {
                         fprintf(stderr, "Unrecognized character %c\n", ch);
-                        error_free_ll(&head);;
+                        free_tokens(head);;
                         return NULL;
                     }
                 } else if (ch == '\n') {
                     fprintf(stderr, "Quote never closed \'\n");
-                    error_free_ll(&head);;
+                    free_tokens(head);;
                     return NULL;
                 } else if (ch == '\\') {
                     i++;
@@ -251,12 +250,12 @@ tok_node* tokenize (char *input)
                         save_string(token, &head, 0);
                     } else {
                         fprintf(stderr, "Unrecognized character %c\n", ch);
-                        error_free_ll(&head);;
+                        free_tokens(head);;
                         return NULL;
                     }
                 } else if (ch == '\n') {
                     fprintf(stderr, "Quote never closed \"\n");
-                    error_free_ll(&head);;
+                    free_tokens(head);;
                     return NULL;
                 } else if (ch == '\\') {
                     i++;
@@ -302,16 +301,26 @@ static void save_string (char *token, tok_node **head, int spec)
     return;
 }
 
-/**
- * called when an error occurs to free up memory
- */
-static void error_free_ll (tok_node **head)
+void print_tokens (tok_node *head)
 {
-    tok_node *temp = *head;
+    tok_node *list = head;
+    while (list != NULL) {
+        printf("%d:%s\n", list->special, list->token);
+        list = list->next;
+    }
+}
+
+/**
+ * call to free all tokens and linked list
+ */
+void free_tokens (tok_node *head)
+{
+    tok_node *temp = head;
     while (temp != NULL) {
-        *head = (*head)->next;
+        head = head->next;
+        free(temp->token);
         free(temp);
-        temp = *head;
+        temp = head;
     }
     return;
 }
@@ -339,12 +348,7 @@ static void error_free_ll (tok_node **head)
 //    }
 //
 //    /* free the nodes */
-//    list = tok_input;
-//    while (tok_input != NULL) {
-//        list = tok_input->next;
-//        free(tok_input);
-//        tok_input = list;
-//    }
+//    free_tokens(head);
 //
 //    return 0;
 //}

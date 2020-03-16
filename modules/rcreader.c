@@ -21,8 +21,6 @@
 #include "../includes/tokenizer.h"
 #include "../includes/rcreader.h"
 
-static void print_and_free (tok_node **);
-
 /**
  * Opens the user's home directory using the $HOME environment
  *  variable and tries to find a .sushrc file that is executable
@@ -57,17 +55,17 @@ void read_sushrc ()
                         length = strlen(buf);
                         if (length == 1024) {
                             if (buf[length-1] == '\n') {
-                                // TODO call executor here
                                 tok_node *head = tokenize(buf);
-                                print_and_free(&head); //instead of this
+                                // TODO call executor here
+                                free_tokens(head);
                             } else {
                                 while (fgetc(fp) != '\n') { }
                                 fprintf(stderr, "maxlen 1023, skipping...\n");
                             }
                         } else {
-                            // TODO call executor here
                             tok_node *head = tokenize(buf);
-                            print_and_free(&head); //instead of this
+                            // TODO call executor here
+                            free_tokens(head);
                         }
                     }
                     fclose(fp); // close the file
@@ -82,20 +80,5 @@ void read_sushrc ()
         closedir(dir);
     } else {
         perror("In read_sushrc() - Could not open $HOME ");
-    }
-}
-
-static void print_and_free (tok_node **head)
-{
-    tok_node *list = *head;
-    while (list != NULL) {
-        printf("%d:%s\n", list->special, list->token);
-        list = list->next;
-    }
-    list = *head;
-    while (list != NULL) {
-        *head = (*head)->next;
-        free(list);
-        list = *head;
     }
 }

@@ -9,4 +9,8 @@ typedef struct tok_node {
 
 tok_node* tokenize (char*);
 
+void free_tokens (tok_node*);
+
+void print_tokens (tok_node*);
+
 #endif
