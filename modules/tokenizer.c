@@ -27,7 +27,7 @@ typedef enum {
 } Token_Sys_State;
 
 static void save_string (char*, tok_node**, int);
-static void error_free_ll (tok_node **);
+static void error_free_ll (tok_node**);
 
 /**
  * Uses state machine to tokenize a user's input into appropriate
