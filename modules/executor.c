@@ -38,6 +38,7 @@ void count_ll (tok_node *head, int *ct, int *spec_ct)
 void output_to_file (tok_node *list, char **cmd, int ct, bool append)
 {
     int fd;
+    list = list->next;
     if (append) {
         fd = open(list->token, O_WRONLY | O_CREAT | O_APPEND,
                 S_IWUSR | S_IRUSR);
@@ -52,6 +53,10 @@ void output_to_file (tok_node *list, char **cmd, int ct, bool append)
     dup2(fd, STDOUT_FILENO); // stdout > file
     close(fd); // done, connection made with dup2
     cmd[ct] = NULL;
+
+    /* TODO MUST USE $PATH TO DETERMINE WHETHER OR NOT TO ATTEMPT
+     * EXEC CALLS !!!
+     * see rcreader.c for how to search directories */
     execvp(cmd[0], cmd);
     perror("could not exec in output_to_file\n");
     exit(-1);
@@ -61,6 +66,7 @@ void output_to_file (tok_node *list, char **cmd, int ct, bool append)
 void file_to_input (tok_node *list, char **cmd, int ct)
 {
     int fd;
+    list = list->next;
     fd = open(list->token, O_RDONLY, S_IRUSR | S_IRGRP | S_IROTH);
     if (fd < 0) {
         perror("open failed in execute > file_to_input\n");
@@ -70,6 +76,10 @@ void file_to_input (tok_node *list, char **cmd, int ct)
     dup2(fd, STDIN_FILENO); // stdin < file
     close(fd); // done, connection made with dup2
     cmd[ct] = NULL;
+
+    /* TODO MUST USE $PATH TO DETERMINE WHETHER OR NOT TO ATTEMPT
+     * EXEC CALLS !!!
+     * see rcreader.c for how to search directories */
     execvp(cmd[0], cmd);
     perror("could not exec in file_to_input\n");
     exit(-1);
@@ -99,7 +109,6 @@ void execute (tok_node *head)
     while (list != NULL) {
         if (list->special) {
             *spec = list->token;
-            list = list->next;
             pid = fork();
             if (pid < 0) {
                 perror("fork() failed in execute\n");
