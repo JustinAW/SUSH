@@ -96,29 +96,65 @@ void execute (tok_node *head)
 {
     /* get path in form of linked list */
     path_node *phead = get_path();
+    bool first_cmd = true;
 
     /* find length of linked list */
-    int ct = 0, spec_ct = 0;
-    count_tl(head, &ct, &spec_ct);
+    int ct = 0, pipe_ct = 0;
+    count_tl(head, &ct, &pipe_ct);
 
     /* allocate storage for the cmd(s)
      * and the special token location(s) */
     char *cmd[ct+1];
-    char *spec[1];
 
     /* create variables for possible pipes
      * and redirects */
-    int pipefd[2];
-    /* for forks */
-    int status;
-    pid_t pid;
+    int pipefd[pipe_ct][2];
 
     /* fork() and exec() + handle redirs & pipes */
+    tok_node *cmd_list[pipe_ct+1];
     tok_node *list = head;
-    ct = 0;
+    cmd_list[0] = head;
+    ct = 1;
     while (list != NULL) {
         if (list->special) {
-            *spec = list->token;
+            if (!strcmp(*spec, "|")) {
+                cmd_list[ct++] = list->next;
+            }
+        }
+        list = list->next;
+    }
+
+    for (int i = 0; i < pipe_ct; i++) {
+        if (pipe(pipefd[i]) < 0) {
+            perror("pipe failed");
+        }
+    }
+
+    /* for forks */
+    int status;
+    pid_t pids[ct];
+
+    int pid_ct = 0;
+    while (ct > 0) {
+        pids[pid_ct] = fork();
+        if (pids[pid_ct] < 0) {
+            perror("fork() failed in execute\n");
+            exit(-1);
+        } else if (pids[pid_ct] == 0) { // child
+        } else { // parent
+            while (1) {
+                pid_t pidp = waitpid(pid[pid_ct], &status, 0);
+                if (pidp <= 0) break;
+            }
+        }
+
+        ct--;
+    }
+
+    free_path(phead);
+    return;
+}
+/*
             pid = fork();
             if (pid < 0) {
                 perror("fork() failed in execute\n");
@@ -143,32 +179,11 @@ void execute (tok_node *head)
                     if (pidp <= 0) break;
                 }
             }
-            ct = 0;
-            list = list->next;
-        } else if (list->next == NULL && spec_ct == 0) {
-            cmd[ct++] = list->token;
-            cmd[ct] = NULL;
-            pid = fork();
-            if (pid < 0) {
-                perror("fork() failed in execute\n");
-                exit(-1);
-            } else if (pid == 0) { // child
-                execvp(cmd[0], cmd);
-            } else { // parent
-                while (1) {
-                    pid_t pidp = waitpid(pid, &status, 0);
-                    if (pidp <= 0) break;
-                }
-            }
-            list = list->next;
         } else {
             cmd[ct++] = list->token;
             list = list->next;
         }
-    }
-    free_path(phead);
-    return;
-}
+*/
 
 int main (int argc, char **argv)
 {
@@ -191,13 +206,15 @@ int main (int argc, char **argv)
     return 0;
 }
 
-/** count total tokens and special tokens in a given tok_node
+/** count total tokens and pipes in a given tok_node
  * linked list */
-static void count_tl (tok_node *head, int *ct, int *spec_ct)
+static void count_tl (tok_node *head, int *ct, int *pipe_ct)
 {
     while (head != NULL) {
         if (head->special) {
-            (*spec_ct)++;
+            if (!strcmp(head->special, "|") == 0) {
+                (*pipe_ct)++;
+            }
         }
         head = head->next;
         (*ct)++;
