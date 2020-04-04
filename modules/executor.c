@@ -240,7 +240,9 @@ int main (int argc, char **argv)
 //    print_tokens(head);
 
     /* exec tokenized input */
-    execute(head);
+    if (head) {
+        execute(head);
+    }
 
     /* free the tokenized input */
     free_tokens(head);
