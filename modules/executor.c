@@ -36,28 +36,50 @@ static path_node* get_path();
 static void free_path (path_node *);
 static bool bin_exists (path_node *, char *);
 
+enum Read_Write {
+    READ,
+    WRITE
+};
+
+struct subsection {
+    tok_node *head;
+    tok_node *tail;
+};
+
+/** gets a file descriptor for the given file name f */
+static int get_fd (char *f, enum Read_Write rw, bool append)
+{
+    int fd;
+    if (rw == READ) {
+        fd = open(f, O_RDONLY, S_IRUSR | S_IRGRP | S_IROTH);
+    }
+    if (rw == WRITE) {
+        if (append) {
+            fd = open(f, O_WRONLY | O_CREAT | O_APPEND, S_IWUSR | S_IRUSR);
+        } else {
+            fd = open(f, O_WRONLY | O_CREAT, S_IWUSR | S_IRUSR);
+        }
+    }
+    if (fd < 0) {
+        perror("open failed in get_fd\n");
+        exit(-1);
+    }
+
+    return 0;
+}
+
 /** redirect stdout to the file listed after >
  *  append controls whether the file is appended or overwritten */
 static void output_to_file (tok_node *list, char **cmd, int ct, bool append, path_node *phead)
 {
     int fd;
     list = list->next;
-    if (append) {
-        fd = open(list->token, O_WRONLY | O_CREAT | O_APPEND,
-                S_IWUSR | S_IRUSR);
-    } else {
-        fd = open(list->token, O_WRONLY | O_CREAT, S_IWUSR | S_IRUSR);
-    }
-    if (fd < 0) {
-        perror("open failed in execute > output_to_file\n");
-        exit(-1);
-    }
+    fd = get_fd(list->token, WRITE, append);
 
     dup2(fd, STDOUT_FILENO); // stdout > file
     close(fd); // done, connection made with dup2
     cmd[ct] = NULL;
 
-    // TODO check for other special tokens to call redirects as necessary
     if (bin_exists(phead, cmd[0])) {
         execvp(cmd[0], cmd);
     } else {
@@ -72,17 +94,12 @@ static void file_to_input (tok_node *list, char **cmd, int ct, path_node *phead)
 {
     int fd;
     list = list->next;
-    fd = open(list->token, O_RDONLY, S_IRUSR | S_IRGRP | S_IROTH);
-    if (fd < 0) {
-        perror("open failed in execute > file_to_input\n");
-        exit(-1);
-    }
+    fd = get_fd(list->token, READ, false);
 
     dup2(fd, STDIN_FILENO); // stdin < file
     close(fd); // done, connection made with dup2
     cmd[ct] = NULL;
 
-    // TODO check for other special tokens to call redirects as necessary
     if (bin_exists(phead, cmd[0])) {
         execvp(cmd[0], cmd);
     } else {
@@ -92,37 +109,55 @@ static void file_to_input (tok_node *list, char **cmd, int ct, path_node *phead)
     exit(-1);
 }
 
+/** Gets the next cmd subsection of the linked list based on whether
+ *  it reaches the end or it finds a | */
+static struct subsection get_next_subsection (tok_node *curr)
+{
+    struct subsection cmd;
+    cmd.head = curr;
+
+    tok_node *prev = curr;
+    while (curr != NULL) {
+        if (curr->special) {
+            if (!strcmp(curr->token, "|")) {
+                cmd.tail = prev;
+                break;
+            }
+        }
+        prev = curr;
+        curr = curr->next;
+        if (curr == NULL) {
+            cmd.tail = prev;
+        }
+    }
+
+    return cmd;
+}
+
 void execute (tok_node *head)
 {
     /* get path in form of linked list */
     path_node *phead = get_path();
-    bool first_cmd = true;
 
     /* find length of linked list */
     int ct = 0, pipe_ct = 0;
     count_tl(head, &ct, &pipe_ct);
 
-    /* allocate storage for the cmd(s)
-     * and the special token location(s) */
-    char *cmd[ct+1];
+    /* allocate storage for the cmd(s) */
+    struct subsection cmds[pipe_ct+1];
 
-    /* create variables for possible pipes
-     * and redirects */
-    int pipefd[pipe_ct][2];
-
-    /* fork() and exec() + handle redirs & pipes */
-    tok_node *cmd_list[pipe_ct+1];
-    tok_node *list = head;
-    cmd_list[0] = head;
-    ct = 1;
-    while (list != NULL) {
-        if (list->special) {
-            if (!strcmp(*spec, "|")) {
-                cmd_list[ct++] = list->next;
-            }
+    /* split input into separate cmds if pipe(s) */
+    tok_node *curr = head;
+    for (int i = 0; i < pipe_ct+1; i++) {
+        cmds[i] = get_next_subsection(curr);
+        curr = cmds[i].tail;
+        if(curr->next != NULL) { // move to next non pipe token
+            curr = curr->next->next;
         }
-        list = list->next;
     }
+
+    /* create variables for pipes */
+    int pipefd[pipe_ct][2];
 
     for (int i = 0; i < pipe_ct; i++) {
         if (pipe(pipefd[i]) < 0) {
@@ -132,25 +167,37 @@ void execute (tok_node *head)
 
     /* for forks */
     int status;
-    pid_t pids[ct];
+    pid_t pid;
 
-    int pid_ct = 0;
-    while (ct > 0) {
-        pids[pid_ct] = fork();
-        if (pids[pid_ct] < 0) {
+    for (int i = 0; i < pipe_ct+1; i++) {
+        pid = fork();
+        if (pid < 0) {
             perror("fork() failed in execute\n");
             exit(-1);
-        } else if (pids[pid_ct] == 0) { // child
+        } else if (pid == 0) { // child
+            if (i > 0) {
+                dup2(pipefd[i-1][0], STDIN_FILENO);
+                close(pipefd[i-1][0]);
+                close(pipefd[i-1][1]);
+            }
+            if (i+1 < pipe_ct+1) {
+                close(pipefd[i][0]);
+                dup2(pipefd[i][1], STDOUT_FILENO);
+                close(pipefd[i][1]);
+            }
         } else { // parent
+            if (i > 0) {
+                close(pipefd[i-1][0]);
+                close(pipefd[i-1][1]);
+            }
             while (1) {
-                pid_t pidp = waitpid(pid[pid_ct], &status, 0);
+                pid_t pidp = waitpid(pid, &status, 0);
                 if (pidp <= 0) break;
             }
         }
-
-        ct--;
     }
 
+    printf("made it past pipe section\n");
     free_path(phead);
     return;
 }
@@ -212,7 +259,7 @@ static void count_tl (tok_node *head, int *ct, int *pipe_ct)
 {
     while (head != NULL) {
         if (head->special) {
-            if (!strcmp(head->special, "|") == 0) {
+            if (!strcmp(head->token, "|")) {
                 (*pipe_ct)++;
             }
         }
