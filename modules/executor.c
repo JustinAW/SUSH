@@ -6,7 +6,7 @@
  * strings stored in it as a command            *
  ************************************************
  * Author: Justin Weigle                        *
- * Edited: 16 Mar 2020                          *
+ * Edited: 04 Apr 2020                          *
  ************************************************/
 
 #include <stdio.h>
@@ -28,23 +28,26 @@ typedef struct path_node {
     struct path_node *next;
 } path_node;
 
-static void count_tl (tok_node *, int *, int *);
-static void output_to_file (tok_node *, char **, int, bool, path_node *);
-static void file_to_input (tok_node *, char **, int, path_node *);
-static void save_path(char *, path_node **);
-static path_node* get_path();
-static void free_path (path_node *);
-static bool bin_exists (path_node *, char *);
+struct subsection {
+    tok_node *head;
+    tok_node *tail;
+    int count;
+};
 
 enum Read_Write {
     READ,
     WRITE
 };
 
-struct subsection {
-    tok_node *head;
-    tok_node *tail;
-};
+static void count_tl (tok_node *, int *, int *);
+static void output_to_file (char *, bool);
+static void file_to_input (char *);
+static void save_path(char *, path_node **);
+static path_node* get_path();
+static void free_path (path_node *);
+static bool bin_exists (char *);
+static int get_fd (char *, enum Read_Write, bool);
+static struct subsection get_next_subsection (tok_node *);
 
 /** gets a file descriptor for the given file name f */
 static int get_fd (char *f, enum Read_Write rw, bool append)
@@ -65,42 +68,59 @@ static int get_fd (char *f, enum Read_Write rw, bool append)
         exit(-1);
     }
 
-    return 0;
+    return fd;
 }
 
 /** redirect stdout to the file listed after >
  *  append controls whether the file is appended or overwritten */
-static void output_to_file (tok_node *list, char **cmd, int ct, bool append, path_node *phead)
+static void output_to_file (char *fname, bool append)
 {
     int fd;
-    list = list->next;
-    fd = get_fd(list->token, WRITE, append);
-
+    fd = get_fd(fname, WRITE, append);
     dup2(fd, STDOUT_FILENO); // stdout > file
     close(fd); // done, connection made with dup2
-    cmd[ct] = NULL;
-
-    if (bin_exists(phead, cmd[0])) {
-        execvp(cmd[0], cmd);
-    } else {
-        exit(0);
-    }
-    perror("could not exec in output_to_file\n");
-    exit(-1);
 }
 
 /** redirect a file to stdin */
-static void file_to_input (tok_node *list, char **cmd, int ct, path_node *phead)
+static void file_to_input (char *fname)
 {
     int fd;
-    list = list->next;
-    fd = get_fd(list->token, READ, false);
-
+    fd = get_fd(fname, READ, false);
     dup2(fd, STDIN_FILENO); // stdin < file
     close(fd); // done, connection made with dup2
-    cmd[ct] = NULL;
+}
 
-    if (bin_exists(phead, cmd[0])) {
+static void parse_cmd (struct subsection cmd_ll)
+{
+    char *cmd[cmd_ll.count +1];
+
+    tok_node *curr = cmd_ll.head;
+    int i = 0;
+
+    /* build command. don't include redirects */
+    while ((curr != NULL)  && !(curr->special)) {
+        cmd[i++] = curr->token;
+        curr = curr->next;
+    }
+    cmd[i] = NULL;
+
+    curr = cmd_ll.head;
+    while (curr != cmd_ll.tail->next) {
+        if (curr->special) {
+            if (!strcmp(curr->token, ">")) {
+                output_to_file(curr->next->token, false);
+            }
+            if (!strcmp(curr->token, ">>")) {
+                output_to_file(curr->next->token, true);
+            }
+            if (!strcmp(curr->token, "<")) {
+                file_to_input(curr->next->token);
+            }
+        }
+        curr = curr->next;
+    }
+
+    if (bin_exists(cmd[0])) {
         execvp(cmd[0], cmd);
     } else {
         exit(0);
@@ -115,8 +135,9 @@ static struct subsection get_next_subsection (tok_node *curr)
 {
     struct subsection cmd;
     cmd.head = curr;
+    int count = 0;
 
-    tok_node *prev = curr;
+    tok_node *prev = NULL;
     while (curr != NULL) {
         if (curr->special) {
             if (!strcmp(curr->token, "|")) {
@@ -129,16 +150,15 @@ static struct subsection get_next_subsection (tok_node *curr)
         if (curr == NULL) {
             cmd.tail = prev;
         }
+        count++;
     }
+    cmd.count = count;
 
     return cmd;
 }
 
 void execute (tok_node *head)
 {
-    /* get path in form of linked list */
-    path_node *phead = get_path();
-
     /* find length of linked list */
     int ct = 0, pipe_ct = 0;
     count_tl(head, &ct, &pipe_ct);
@@ -170,6 +190,7 @@ void execute (tok_node *head)
     pid_t pid;
 
     for (int i = 0; i < pipe_ct+1; i++) {
+        fflush(NULL);
         pid = fork();
         if (pid < 0) {
             perror("fork() failed in execute\n");
@@ -189,7 +210,7 @@ void execute (tok_node *head)
                 }
                 close(pipefd[i][1]);
             }
-            execlp(cmds[i].head->token, cmds[i].head->token, cmds[i].tail->token, NULL);
+            parse_cmd(cmds[i]);
             printf("exec failed\n");
         } else { // parent
             if (i > 0) {
@@ -203,40 +224,8 @@ void execute (tok_node *head)
         }
     }
 
-    printf("made it past exec section\n");
-    free_path(phead);
     return;
 }
-/*
-            pid = fork();
-            if (pid < 0) {
-                perror("fork() failed in execute\n");
-                exit(-1);
-            } else if (pid == 0) { // child
-                if (!strcmp(*spec, ">")) {
-                    output_to_file(list, cmd, ct, false, phead);
-                }
-                if (!strcmp(*spec, ">>")) {
-                    output_to_file(list, cmd, ct, true, phead);
-                }
-                if (!strcmp(*spec, "<")) {
-                    file_to_input(list, cmd, ct, phead);
-                }
-                if (!strcmp(*spec, "|")) {
-                    printf("found |\n");
-                }
-                exit(0);
-            } else { // parent
-                while (1) {
-                    pid_t pidp = waitpid(pid, &status, 0);
-                    if (pidp <= 0) break;
-                }
-            }
-        } else {
-            cmd[ct++] = list->token;
-            list = list->next;
-        }
-*/
 
 int main (int argc, char **argv)
 {
@@ -248,7 +237,7 @@ int main (int argc, char **argv)
     tok_node *head = tokenize(userin);
 
     /* print the tokenized input */
-    print_tokens(head);
+//    print_tokens(head);
 
     /* exec tokenized input */
     execute(head);
@@ -334,8 +323,11 @@ static void free_path (path_node *phead)
 }
 
 /* checks the path environment variable to see if bin is in it */
-static bool bin_exists (path_node *phead, char *bin)
+static bool bin_exists (char *bin)
 {
+    /* get path in form of linked list */
+    path_node *phead = get_path();
+
     bool found = false;
     DIR *dir;
     struct dirent *entry;
@@ -352,5 +344,6 @@ static bool bin_exists (path_node *phead, char *bin)
         list = list->next;
     }
     closedir(dir);
+    free_path(phead);
     return found;
 }
