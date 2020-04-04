@@ -176,15 +176,21 @@ void execute (tok_node *head)
             exit(-1);
         } else if (pid == 0) { // child
             if (i > 0) {
-                dup2(pipefd[i-1][0], STDIN_FILENO);
+                if (dup2(pipefd[i-1][0], STDIN_FILENO) < 0) {
+                    perror("dup2 failed");
+                }
                 close(pipefd[i-1][0]);
                 close(pipefd[i-1][1]);
             }
             if (i+1 < pipe_ct+1) {
                 close(pipefd[i][0]);
-                dup2(pipefd[i][1], STDOUT_FILENO);
+                if (dup2(pipefd[i][1], STDOUT_FILENO) < 0) {
+                    perror("bottom dup2 failed");
+                }
                 close(pipefd[i][1]);
             }
+            execlp(cmds[i].head->token, cmds[i].head->token, cmds[i].tail->token, NULL);
+            printf("exec failed\n");
         } else { // parent
             if (i > 0) {
                 close(pipefd[i-1][0]);
@@ -197,7 +203,7 @@ void execute (tok_node *head)
         }
     }
 
-    printf("made it past pipe section\n");
+    printf("made it past exec section\n");
     free_path(phead);
     return;
 }

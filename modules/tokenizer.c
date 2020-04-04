@@ -213,10 +213,25 @@ tok_node* tokenize (char *input)
                     fprintf(stderr, "Quote never closed \'\n");
                     free_tokens(head);;
                     return NULL;
-                } else if (ch == '\\') {
+                } else if (ch == '\\') { // handle escaped characters
                     i++;
-                    token[j] = input[i];
-                    j++;
+                    char ec = input[i];
+                    if (ec == 'n') {
+                        token[j++] = '\n';
+                    } else if (ec == 'b') {
+                        token[j++] = '\b';
+                    } else if (ec == 'r') {
+                        token[j++] = '\r';
+                    } else if (ec == 't') {
+                        token[j++] = '\t';
+                    } else if (ec == 'v') {
+                        token[j++] = '\v';
+                    } else if (ec == '0') {
+                        token[j++] = '\0';
+                    } else {
+                        token[j++] = input[i-1];
+                        token[j++] = ec;
+                    }
                 } else {
                     token[j] = ch;
                     j++;
@@ -257,10 +272,25 @@ tok_node* tokenize (char *input)
                     fprintf(stderr, "Quote never closed \"\n");
                     free_tokens(head);;
                     return NULL;
-                } else if (ch == '\\') {
+                } else if (ch == '\\') { // handle escaped characters
                     i++;
-                    token[j] = input[i];
-                    j++;
+                    char ec = input[i];
+                    if (ec == 'n') {
+                        token[j++] = '\n';
+                    } else if (ec == 'b') {
+                        token[j++] = '\b';
+                    } else if (ec == 'r') {
+                        token[j++] = '\r';
+                    } else if (ec == 't') {
+                        token[j++] = '\t';
+                    } else if (ec == 'v') {
+                        token[j++] = '\v';
+                    } else if (ec == '0') {
+                        token[j++] = '\0';
+                    } else {
+                        token[j++] = input[i-1];
+                        token[j++] = ec;
+                    }
                 } else {
                     token[j] = ch;
                     j++;
