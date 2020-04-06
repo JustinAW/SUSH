@@ -19,6 +19,10 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <fcntl.h>
+#include <signal.h>
+#include <time.h>
+#include <sys/time.h>
+#include <sys/resource.h>
 #include "../includes/sush.h"
 #include "../includes/tokenizer.h"
 #include "../includes/executor.h"
@@ -96,6 +100,7 @@ void execute (tok_node *head)
             perror("ahhhh, fork() this");
             exit(-1);
         } else if (pid == 0) { // child
+            signal(SIGINT, SIG_DFL);
             if (i > 0) { // if not the first cmd
                 /* connect read end of prev proc pipe to STDIN of curr proc */
                 if (dup2(pipefd[i-1][0], STDIN_FILENO) < 0) {
@@ -373,8 +378,23 @@ static void free_path (path_node *phead)
     }
 }
 
+void childdeath (int sig) {
+    struct rusage *ruse = malloc(sizeof(struct rusage) + 1);
+    getrusage(RUSAGE_CHILDREN, ruse);
+
+    time_t now;
+    now = ruse->ru_utime.tv_sec;
+    time(&now);
+    printf("Today is : %s", ctime(&now));
+    free(ruse);
+}
+
 int main (int argc, char **argv)
 {
+    signal(SIGINT, SIG_IGN);
+    signal(SIGCHLD, childdeath);
+
+
     char userin[BUFF_SIZE];
     printf("Input something to be tokenized and run\n");
     fgets(userin, BUFF_SIZE, stdin);
