@@ -3,7 +3,7 @@
 
 typedef struct tok_node {
     char *token;
-    int special;
+    bool special;
     struct tok_node *next;
 } tok_node;
 

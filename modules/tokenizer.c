@@ -7,13 +7,14 @@
  * further be used to execute shell commands    *
  ************************************************
  * Author: Justin Weigle                        *
- * Edited: 04 Apr 2020                          *
+ * Edited: 06 Apr 2020                          *
  ************************************************/
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
+#include <stdbool.h>
 #include "../includes/sush.h"
 #include "../includes/tokenizer.h"
 
@@ -26,7 +27,7 @@ typedef enum {
     Double_Quote_State,
 } Token_Sys_State;
 
-static void save_string (char*, tok_node**, int);
+static void save_string (char*, tok_node**, bool);
 
 /**
  * Uses state machine to tokenize a user's input into appropriate
@@ -76,7 +77,7 @@ tok_node* tokenize (char *input)
             case Letter_State:
                 if (ch == '\n') {
                     token[j] = '\0';
-                    save_string(token, &head, 0);
+                    save_string(token, &head, false);
                 } else if (ch == '"') {
                     State = Double_Quote_State;
                 } else if (ch == '\'') {
@@ -84,13 +85,13 @@ tok_node* tokenize (char *input)
                 } else if (ch == '<' || ch == '>' || ch == '|') {
                     State = Redirect_State;
                     token[j] = '\0';
-                    save_string(token, &head, 0);
+                    save_string(token, &head, false);
                     token[0] = ch;
                     j = 1;
                 } else if (ch == ' ') {
                     State = Blank_State;
                     token[j] = '\0';
-                    save_string(token, &head, 0);
+                    save_string(token, &head, false);
                     j = 0;
                 } else if (32 <= ch && ch <= 127) {
                     token[j] = ch;
@@ -132,12 +133,12 @@ tok_node* tokenize (char *input)
                 if (ch == '"') {
                     State = Double_Quote_State;
                     token[j] = '\0';
-                    save_string(token, &head, 1);
+                    save_string(token, &head, true);
                     j = 0;
                 } else if (ch == '\'') {
                     State = Single_Quote_State;
                     token[j] = '\0';
-                    save_string(token, &head, 1);
+                    save_string(token, &head, true);
                     j = 0;
                 } else if (ch == '\n') {
                     fprintf(stderr, "Can't have redirect at end of input\n");
@@ -166,7 +167,7 @@ tok_node* tokenize (char *input)
                 } else if (32 <= ch && ch <= 127) {
                     State = Letter_State;
                     token[j] = '\0';
-                    save_string(token, &head, 1);
+                    save_string(token, &head, true);
                     token[0] = ch;
                     j = 1;
                 } else {
@@ -189,13 +190,13 @@ tok_node* tokenize (char *input)
                     } else if (ch == '<' || ch == '>' || ch == '|') {
                         State = Redirect_State;
                         token[j] = '\0';
-                        save_string(token, &head, 0);
+                        save_string(token, &head, false);
                         token[0] = ch;
                         j = 1;
                     } else if (ch == ' ') {
                         State = Blank_State;
                         token[j] = '\0';
-                        save_string(token, &head, 0);
+                        save_string(token, &head, false);
                         j = 0;
                     } else if (32 <= ch && ch <= 127) {
                         State = Letter_State;
@@ -203,7 +204,7 @@ tok_node* tokenize (char *input)
                         j++;
                     } else if (ch == '\n') {
                         token[j] = '\0';
-                        save_string(token, &head, 0);
+                        save_string(token, &head, false);
                     } else {
                         fprintf(stderr, "Unrecognized character %c\n", ch);
                         free_tokens(head);;
@@ -248,13 +249,13 @@ tok_node* tokenize (char *input)
                     } else if (ch == '<' || ch == '>' || ch == '|') {
                         State = Redirect_State;
                         token[j] = '\0';
-                        save_string(token, &head, 0);
+                        save_string(token, &head, false);
                         token[0] = ch;
                         j = 1;
                     } else if (ch == ' ') {
                         State = Blank_State;
                         token[j] = '\0';
-                        save_string(token, &head, 0);
+                        save_string(token, &head, false);
                         j = 0;
                     } else if (32 <= ch && ch <= 127) {
                         State = Letter_State;
@@ -262,7 +263,7 @@ tok_node* tokenize (char *input)
                         j++;
                     } else if (ch == '\n') {
                         token[j] = '\0';
-                        save_string(token, &head, 0);
+                        save_string(token, &head, false);
                     } else {
                         fprintf(stderr, "Unrecognized character %c\n", ch);
                         free_tokens(head);;
@@ -307,13 +308,20 @@ tok_node* tokenize (char *input)
  * Inserts a new node at the end of the linked list pointed to by head
  * with the given string token and marks whether it is a special
  * token or not based on spec */
-static void save_string (char *token, tok_node **head, int spec)
+static void save_string (char *token, tok_node **head, bool spec)
 {
-    // TODO in this function: error checking
     tok_node *list = *head;
     tok_node *t_node = malloc(sizeof(tok_node)); // make new node
     int length = strlen(token);
+    if (t_node == NULL) {
+        perror("malloc failed in save_string");
+        exit(-1);
+    }
     t_node->token = malloc(sizeof(char)*length+1); // make space for token
+    if (t_node->token == NULL) {
+        perror("malloc failed in save_string");
+        exit(-1);
+    }
     strncpy(t_node->token, token, length+1); // put token in node
     t_node->token[length] = '\0'; // in case strncpy doesn't null terminate
     t_node->special = spec; // set if token is special
@@ -331,15 +339,6 @@ static void save_string (char *token, tok_node **head, int spec)
     return;
 }
 
-void print_tokens (tok_node *head)
-{
-    tok_node *list = head;
-    while (list != NULL) {
-        printf("%d:%s\n", list->special, list->token);
-        list = list->next;
-    }
-}
-
 /**
  * call to free all tokens and linked list
  */
@@ -353,6 +352,19 @@ void free_tokens (tok_node *head)
         temp = head;
     }
     return;
+}
+
+/**
+ * prints all the tokens in the list and whether
+ * they are special or not
+ */
+void print_tokens (tok_node *head)
+{
+    tok_node *list = head;
+    while (list != NULL) {
+        printf("%d:%s\n", list->special, list->token);
+        list = list->next;
+    }
 }
 
 /**
