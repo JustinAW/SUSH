@@ -2,7 +2,9 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
+#include <unistd.h>
 #include "../includes/internal.h"
+#include "../includes/sush.h"
 
 static envvar_node* add_env_var (envvar_node *, struct env_var);
 
@@ -105,7 +107,38 @@ static envvar_node* add_env_var (envvar_node *head, struct env_var new_env_var)
     return head;
 }
 
+
+void change_directory (char *new_dir)
+{
+    if (new_dir[0] == '~') {
+        const char *home = getenv("HOME");
+        char tmpstr[strlen(home)+1];
+        strcpy(tmpstr, home);
+        const char *fpath = strcat(tmpstr, &new_dir[1]);
+        chdir(fpath);
+        return;
+    }
+    chdir(new_dir);
+}
+
+void print_wdirectory ()
+{
+    char buff[BUFF_SIZE];
+    getcwd(buff, BUFF_SIZE);
+    printf("%s\n", buff);
+}
+
 /*
+int main (int argc, char **argv)
+{
+    print_wdirectory();
+    change_directory("..");
+    print_wdirectory();
+    change_directory("~/..");
+    print_wdirectory();
+
+    return 0;
+}
 void print_envnodes (envvar_node *head) {
     while(head != NULL) {
         printf("name: %s\n", head->name);
