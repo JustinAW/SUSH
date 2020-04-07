@@ -53,6 +53,7 @@ static void file_to_input (char *);
 static path_node* get_path();
 static void save_path(char *, path_node **);
 static void free_path (path_node *);
+static void print_resources (struct rusage);
 
 /**
  * Counts how many pipes there are in the given linked list of tokens and
@@ -92,6 +93,8 @@ void execute (tok_node *head)
     int status;
     pid_t pid;
 
+    struct rusage child_ruses[cmd_ct];
+
     /* fork for every cmd in input */
     for (int i = 0; i < cmd_ct; i++) {
         fflush(NULL); // flush all open output streams(especially pipes)
@@ -125,11 +128,14 @@ void execute (tok_node *head)
                 close(pipefd[i-1][0]); // close read end prev proc pipe
                 close(pipefd[i-1][1]); // close write end prev proc pipe
             }
-            while (1) { // wait for children to finish
-                pid_t pidp = waitpid(pid, &status, 0);
-                if (pidp <= 0) break;
-            }
+            /* wait for children to terminate */
+            while(wait3(&status, 0, &child_ruses[i]) <= 0) {}
         }
+    }
+
+    for (int i = 0; i < cmd_ct; i++) {
+//        print_resources(child_ruses[i]);
+        manage_rusage(UPDATE, child_ruses[i]);
     }
 
     return;
@@ -378,40 +384,111 @@ static void free_path (path_node *phead)
     }
 }
 
-void childdeath (int sig) {
-    struct rusage *ruse = malloc(sizeof(struct rusage) + 1);
-    getrusage(RUSAGE_CHILDREN, ruse);
+static void print_resources (struct rusage usage)
+{
+    printf("\n");
+    time_t time1;
+    time_t time2;
+    time1 = usage.ru_utime.tv_sec;
+    time2 = usage.ru_utime.tv_usec;
+    printf("ru_utime    %ld.%ld\n", time1, time2);
+    time1 = usage.ru_stime.tv_sec;
+    time2 = usage.ru_stime.tv_usec;
+    printf("ru_stime    %ld.%ld\n", time1, time2);
+    printf("ru_maxrss   %ld\n",   usage.ru_maxrss);
+    printf("ru_ixrss    %ld\n",    usage.ru_ixrss);
+    printf("ru_idrss    %ld\n",    usage.ru_idrss);
+    printf("ru_isrss    %ld\n",    usage.ru_isrss);
+    printf("ru_minflt   %ld\n",   usage.ru_minflt);
+    printf("ru_majflt   %ld\n",   usage.ru_majflt);
+    printf("ru_nswap    %ld\n",    usage.ru_nswap);
+    printf("ru_inblock  %ld\n",  usage.ru_inblock);
+    printf("ru_oublock  %ld\n",  usage.ru_oublock);
+    printf("ru_msgsnd   %ld\n",   usage.ru_msgsnd);
+    printf("ru_msgrcv   %ld\n",   usage.ru_msgrcv);
+    printf("ru_nsignals %ld\n", usage.ru_nsignals);
+    printf("ru_nvcsw    %ld\n",    usage.ru_nvcsw);
+    printf("ru_nivcsw   %ld\n",   usage.ru_nivcsw);
+    printf("\n");
+}
 
-    time_t now;
-    now = ruse->ru_utime.tv_sec;
-    time(&now);
-    printf("Today is : %s", ctime(&now));
-    free(ruse);
+void show_resources (int sig) {
+    struct rusage ruse;
+    getrusage(RUSAGE_SELF, &ruse);
+    print_resources(ruse);
+}
+
+void manage_rusage (enum RMANAGE setting, struct rusage usage)
+{
+    static struct rusage total_usage;
+    time_t time1;
+    time_t time2;
+
+    if (setting == UPDATE) {
+        time1 = usage.ru_utime.tv_sec;
+        time2 = usage.ru_utime.tv_usec;
+        total_usage.ru_utime.tv_sec += time1;
+        total_usage.ru_utime.tv_usec += time2;
+
+        time1 = usage.ru_stime.tv_sec;
+        time2 = usage.ru_stime.tv_usec;
+        total_usage.ru_stime.tv_sec += time1;
+        total_usage.ru_stime.tv_usec += time2;
+
+        total_usage.ru_maxrss   +=  usage.ru_maxrss;
+        total_usage.ru_ixrss    +=  usage.ru_ixrss;
+        total_usage.ru_idrss    +=  usage.ru_idrss;
+        total_usage.ru_isrss    +=  usage.ru_isrss;
+        total_usage.ru_minflt   +=  usage.ru_minflt;
+        total_usage.ru_majflt   +=  usage.ru_majflt;
+        total_usage.ru_nswap    +=  usage.ru_nswap;
+        total_usage.ru_inblock  +=  usage.ru_inblock;
+        total_usage.ru_oublock  +=  usage.ru_oublock;
+        total_usage.ru_msgsnd   +=  usage.ru_msgsnd;
+        total_usage.ru_msgrcv   +=  usage.ru_msgrcv;
+        total_usage.ru_nsignals +=  usage.ru_nsignals;
+        total_usage.ru_nvcsw    +=  usage.ru_nvcsw;
+        total_usage.ru_nivcsw   +=  usage.ru_nivcsw;
+    } else if (setting == PRINT) {
+        print_resources(total_usage);
+    }
+}
+
+void show_all_resources ()
+{
+    struct rusage ruse;
+    manage_rusage(PRINT, ruse);
+    getrusage(RUSAGE_SELF, &ruse);
+    print_resources(ruse);
 }
 
 int main (int argc, char **argv)
 {
     signal(SIGINT, SIG_IGN);
-    signal(SIGCHLD, childdeath);
-
+    signal(SIGUSR1, show_resources);
+    signal(SIGUSR2, show_all_resources);
 
     char userin[BUFF_SIZE];
-    printf("Input something to be tokenized and run\n");
-    fgets(userin, BUFF_SIZE, stdin);
+    while (!feof(stdin)) {
+        printf("$ ");
+        if (fgets(userin, BUFF_SIZE, stdin) == NULL) {
+            exit(0);
+        }
 
-    /* get tokenized input */
-    tok_node *head = tokenize(userin);
+        /* get tokenized input */
+        tok_node *head = tokenize(userin);
 
-    /* print the tokenized input */
-//    print_tokens(head);
+        /* print the tokenized input */
+    //    print_tokens(head);
 
-    /* exec tokenized input */
-    if (head) {
-        execute(head);
+        /* exec tokenized input */
+        if (head) {
+            execute(head);
+        }
+
+        /* free the tokenized input */
+        free_tokens(head);
     }
-
-    /* free the tokenized input */
-    free_tokens(head);
 
     return 0;
 }
