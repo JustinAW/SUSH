@@ -3,167 +3,127 @@
 #include <stdbool.h>
 #include <string.h>
 #include <unistd.h>
-#include "../includes/internal.h"
+#include <sys/time.h>
+#include <sys/resource.h>
 #include "../includes/sush.h"
+#include "../includes/tokenizer.h"
+#include "../includes/internal.h"
+#include "../includes/executor.h"
 
-static envvar_node* add_env_var (envvar_node *, struct env_var);
+static bool del_env_var (struct tok_list *);
+static bool set_env_var (struct tok_list *);
+static bool change_directory (struct tok_list *);
+static bool print_wdirectory ();
 
-/**
- * set an environment variable
- */
-envvar_node* setenv_var (envvar_node *head, struct env_var new_env_var)
-{
-    envvar_node *curr = head;
-    while (curr != NULL) {
-        if (!strcmp(curr->name, new_env_var.name)) { // if variable is found
-            int length = strlen(new_env_var.value);
-            free(curr->value); // delete current value
-            curr->value = malloc(sizeof(char) * length + 1); // allocate for new value
-            if (curr->value == NULL) {
-                perror("malloc failed in env_var");
-                exit(-1);
-            }
-            strncpy(curr->name, new_env_var.name, length+1); // put in new value
-            curr->name[length] = '\0'; // make sure strncpy NULL terminated
-            break;
+int run_internal_cmd (struct tok_list *tlist) {
+    bool found_internal_cmd = false;
+    bool err_found = false;
+    if (!strcmp(tlist->head->token, "setenv")) {
+        /* set an environment variable */
+        err_found = set_env_var(tlist);
+        found_internal_cmd = true;
+    } else if (!strcmp(tlist->head->token, "unsetenv")) {
+        /* delete an environment variable */
+        err_found = del_env_var(tlist);
+        found_internal_cmd = true;
+    } else if (!strcmp(tlist->head->token, "cd")) {
+        /* change directory */
+        err_found = change_directory(tlist);
+        found_internal_cmd = true;
+    } else if (!strcmp(tlist->head->token, "pwd")) {
+        /* print the current working directory */
+        print_wdirectory();
+        found_internal_cmd = true;
+    } else if (!strcmp(tlist->head->token, "exit")) {
+        /* print accounting info and exit */
+        free_tok_list(tlist);
+        found_internal_cmd = true;
+        show_all_resources();
+        exit(0);
+    } else if (!strcmp(tlist->head->token, "accnt")) {
+        /* print accounting info */
+        show_all_resources();
+        found_internal_cmd = true;
+    }
+
+    if (found_internal_cmd) {
+        if (err_found) {
+            return -1; // found, but error
+        } else {
+            return 0; // found, no error
         }
-        curr = curr->next;
-    }
-    if (curr == NULL) { // if the end of the list was found, var not found
-        head = add_env_var(head, new_env_var); // add a new one
-    }
-
-    return head;
-}
-
-/**
- * Delete an environment variable *name
- */
-envvar_node* unsetenv_var (envvar_node *head, char *name)
-{
-    bool found = false;
-    envvar_node *prev = NULL;
-    envvar_node *curr = head;
-    while (curr != NULL) {
-        if (!strcmp(curr->name, name)) { // when name is found
-            found = true;
-            if (prev == NULL) {
-                head = curr->next; // delete from beginning
-            } else if (curr->next == NULL) {
-                prev->next = NULL; // delete from end
-            } else {
-                prev->next = curr->next; // delete from middle
-            }
-            free(curr->name);
-            free(curr->value);
-            free(curr);
-            break;
-        }
-        prev = curr;
-        curr = curr->next;
-    }
-    if (!found) { // didn't find the environment variable
-        fprintf(stderr, "env var %s not found\n", name);
-    }
-    return head;
-}
-
-/**
- * add a new environment variable
- */
-static envvar_node* add_env_var (envvar_node *head, struct env_var new_env_var)
-{
-    envvar_node *new_node = malloc(sizeof(envvar_node));
-    /* get lengths of the new variable */
-    int name_len = strlen(new_env_var.name);
-    int val_len = strlen(new_env_var.value);
-
-    /* set new environment variable node's name */
-    new_node->name = malloc(sizeof(char) * name_len + 1);
-    if (new_node->name == NULL) {
-        perror("malloc failed in env_var");
-        exit(-1);
-    }
-    strncpy(new_node->name, new_env_var.name, name_len+1);
-    new_node->name[name_len] = '\0';
-
-    /* set new environment variable node's value */
-    new_node->value = malloc(sizeof(char) * val_len + 1);
-    if (new_node->value == NULL) {
-        perror("malloc failed in env_var");
-        exit(-1);
-    }
-    strncpy(new_node->value, new_env_var.value, val_len+1);
-    new_node->value[val_len] = '\0';
-    new_node->next = NULL;
-
-    if (head == NULL) {
-        head = new_node;
-        return head;
     } else {
-        new_node->next = head; // set new node's next to head
-        head = new_node; // set head to new node
+        return 1; // not found
     }
-    return head;
 }
 
-
-void change_directory (char *new_dir)
+/**
+ * Add a new environment variable or modify an existing one
+ */
+static bool set_env_var (struct tok_list *tlist)
 {
-    if (new_dir[0] == '~') {
-        const char *home = getenv("HOME");
-        char tmpstr[strlen(home)+1];
-        strcpy(tmpstr, home);
-        const char *fpath = strcat(tmpstr, &new_dir[1]);
-        chdir(fpath);
-        return;
+    if (tlist->count == 3) {
+        if(setenv(tlist->head->next->token, tlist->tail->token, 1)) {
+            perror("couldn't set env var");
+            return true; // error
+        }
+    } else {
+        fprintf(stderr, "setenv takes 2 arguments");
+        return true; // error
     }
-    chdir(new_dir);
+    return false; // no error
 }
 
-void print_wdirectory ()
+/**
+ * Delete an environment variable
+ */
+static bool del_env_var (struct tok_list *tlist)
+{
+    if (tlist->count == 2) {
+        if(unsetenv(tlist->tail->token)) {
+            perror("couldn't delete");
+            return true; // error
+        }
+    } else {
+        fprintf(stderr, "unsetenv takes 1 argument");
+        return true; // error
+    }
+    return false; // no error
+}
+
+/**
+ * change to a give directory.
+ * ~ == HOME
+ */
+static bool change_directory (struct tok_list *tlist)
+{
+    if (tlist->count == 2) {
+        if ((tlist->head->next->token)[0] == '~') {
+            const char *home = getenv("HOME");
+            char tmpstr[strlen(home)+1];
+            strcpy(tmpstr, home);
+            const char *fpath = strcat(tmpstr, &(tlist->tail->token)[1]);
+            chdir(fpath);
+            return false; // no error
+        }
+        chdir(tlist->tail->token);
+    } else {
+        fprintf(stderr, "cd takes 1 argument\n");
+        return true; // error
+    }
+    return false; // no error
+}
+
+/**
+ * print the current working directory to STDOUT
+ */
+static bool print_wdirectory ()
 {
     char buff[BUFF_SIZE];
-    getcwd(buff, BUFF_SIZE);
-    printf("%s\n", buff);
-}
-
-/*
-int main (int argc, char **argv)
-{
-    print_wdirectory();
-    change_directory("..");
-    print_wdirectory();
-    change_directory("~/..");
-    print_wdirectory();
-
-    return 0;
-}
-void print_envnodes (envvar_node *head) {
-    while(head != NULL) {
-        printf("name: %s\n", head->name);
-        printf("value: %s\n", head->value);
-        head = head->next;
+    if (getcwd(buff, BUFF_SIZE) == NULL) {
+        perror("couldn't get current working directory");
+        return true; // error
     }
+    printf("%s\n", buff);
+    return false; // no error
 }
-int main (int argc, char **argv)
-{
-    envvar_node *head = NULL;
-    struct env_var new_node;
-    new_node.name = "Pickle";
-    new_node.value = "Rick";
-    head = setenv_var(head, new_node);
-
-    struct env_var new_node2;
-    new_node2.name = "Tiny";
-    new_node2.value = "Rick";
-    head = setenv_var(head, new_node2);
-
-//    print_envnodes(head);
-
-    head = unsetenv_var(head, "Pickle");
-    head = unsetenv_var(head, "Tiny");
-
-    return 0;
-}
-*/

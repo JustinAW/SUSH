@@ -26,6 +26,7 @@
 #include "../includes/sush.h"
 #include "../includes/tokenizer.h"
 #include "../includes/executor.h"
+#include "../includes/internal.h"
 
 typedef struct path_node {
     char *path;
@@ -418,6 +419,12 @@ void show_resources (int sig) {
     print_resources(ruse);
 }
 
+void show_child_resources (int sig) {
+    struct rusage ruse;
+    getrusage(RUSAGE_CHILDREN, &ruse);
+    print_resources(ruse);
+}
+
 void manage_rusage (enum RMANAGE setting, struct rusage usage)
 {
     static struct rusage total_usage;
@@ -467,27 +474,44 @@ int main (int argc, char **argv)
     signal(SIGINT, SIG_IGN);
     signal(SIGUSR1, show_resources);
     signal(SIGUSR2, show_all_resources);
+    signal(SIGCHLD, show_child_resources);
+
+    struct tok_list tlist;
+    tlist.head = NULL;
+    tlist.tail = NULL;
+    tlist.count = 0;
 
     char userin[BUFF_SIZE];
     while (!feof(stdin)) {
-        printf("$ ");
+        char *PS1 = getenv("PS1");
+        if (PS1 == NULL) {
+            printf("$ ");
+        } else {
+            printf("%s", PS1);
+        }
         if (fgets(userin, BUFF_SIZE, stdin) == NULL) {
             exit(0);
         }
 
         /* get tokenized input */
-        tok_node *head = tokenize(userin);
+        tokenize(&tlist, userin);
 
         /* print the tokenized input */
-    //    print_tokens(head);
+//        print_tokens(tlist.head);
 
         /* exec tokenized input */
-        if (head) {
-            execute(head);
+        if (tlist.head) {
+            int ret = run_internal_cmd(&tlist);
+            if (ret < 0) {
+                fprintf(stderr,"Unable to run internal command\n");
+            } else if (ret == 0) {
+            } else {
+                execute(tlist.head);
+            }
         }
 
         /* free the tokenized input */
-        free_tokens(head);
+        free_tok_list(&tlist);
     }
 
     return 0;

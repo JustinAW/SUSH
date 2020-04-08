@@ -15,6 +15,8 @@
 #include <string.h>
 #include <stdarg.h>
 #include <stdbool.h>
+#include <sys/time.h>
+#include <sys/resource.h>
 #include "../includes/sush.h"
 #include "../includes/tokenizer.h"
 
@@ -27,22 +29,22 @@ typedef enum {
     Double_Quote_State,
 } Token_Sys_State;
 
-static void save_string (char*, tok_node**, bool);
+static void save_string (char*, struct tok_list**, bool);
 
 /**
  * Uses state machine to tokenize a user's input into appropriate
  * tokens for processing as shell commands
  */
-tok_node* tokenize (char *input)
+void tokenize (struct tok_list *tlist, char *input)
 {
     int length = strlen(input);
     if (input[length-1] != '\n') {
         fprintf(stderr, "Input didn't end in \\n, skipping...\n");
-        return NULL;
+        return;
     }
 
     char token[length];
-    tok_node *head = NULL;
+//    tok_node *head = NULL;
     char ch;
     Token_Sys_State State = Init_State;
 
@@ -53,14 +55,14 @@ tok_node* tokenize (char *input)
              * Save ch if letter */
             case Init_State:
                 if (ch == '\n') {
-                    return NULL;
+                    return;
                 } else if (ch == '"') {
                     State = Double_Quote_State;
                 } else if (ch == '\'') {
                     State = Single_Quote_State;
                 } else if (ch == '<' || ch == '>' || ch == '|') {
                     fprintf(stderr, "Need input before redirect or pipe\n");
-                    return NULL;
+                    return;
                 } else if (ch == ' ') {
                 } else if (32 <= ch && ch <= 127) {
                     State = Letter_State;
@@ -68,7 +70,7 @@ tok_node* tokenize (char *input)
                     j++;
                 } else {
                     fprintf(stderr, "Unrecognized character %c\n", ch);
-                    return NULL;
+                    return;
                 }
                 break;
             /* Change for everything except letters.
@@ -77,7 +79,7 @@ tok_node* tokenize (char *input)
             case Letter_State:
                 if (ch == '\n') {
                     token[j] = '\0';
-                    save_string(token, &head, false);
+                    save_string(token, &tlist, false);
                 } else if (ch == '"') {
                     State = Double_Quote_State;
                 } else if (ch == '\'') {
@@ -85,21 +87,21 @@ tok_node* tokenize (char *input)
                 } else if (ch == '<' || ch == '>' || ch == '|') {
                     State = Redirect_State;
                     token[j] = '\0';
-                    save_string(token, &head, false);
+                    save_string(token, &tlist, false);
                     token[0] = ch;
                     j = 1;
                 } else if (ch == ' ') {
                     State = Blank_State;
                     token[j] = '\0';
-                    save_string(token, &head, false);
+                    save_string(token, &tlist, false);
                     j = 0;
                 } else if (32 <= ch && ch <= 127) {
                     token[j] = ch;
                     j++;
                 } else {
                     fprintf(stderr, "Unrecognized character %c\n", ch);
-                    free_tokens(head);;
-                    return NULL;
+                    free_tok_list(tlist);
+                    return;
                 }
                 break;
             /* Change for everything except blanks.
@@ -121,8 +123,8 @@ tok_node* tokenize (char *input)
                     j++;
                 } else {
                     fprintf(stderr, "Unrecognized character %c\n", ch);
-                    free_tokens(head);
-                    return NULL;
+                    free_tok_list(tlist);
+                    return;
                 }
                 break;
             /* save ch for another > if >.
@@ -133,47 +135,47 @@ tok_node* tokenize (char *input)
                 if (ch == '"') {
                     State = Double_Quote_State;
                     token[j] = '\0';
-                    save_string(token, &head, true);
+                    save_string(token, &tlist, true);
                     j = 0;
                 } else if (ch == '\'') {
                     State = Single_Quote_State;
                     token[j] = '\0';
-                    save_string(token, &head, true);
+                    save_string(token, &tlist, true);
                     j = 0;
                 } else if (ch == '\n') {
                     fprintf(stderr, "Can't have redirect at end of input\n");
-                    free_tokens(head);;
-                    return NULL;
+                    free_tok_list(tlist);;
+                    return;
                 } else if (ch == '<' || ch == '|') {
                     fprintf(stderr, "%c not valid after >\n", ch);
-                    free_tokens(head);;
-                    return NULL;
+                    free_tok_list(tlist);;
+                    return;
                 } else if (ch == '>') {
                     if (input[i-1] == '>') {
                         if (input[i+1] == '>') {
                             fprintf(stderr, "Too many redirects in a row\n");
-                            free_tokens(head);;
-                            return NULL;
+                            free_tok_list(tlist);;
+                            return;
                         }
                         token[j] = ch;
                         j++;
                     } else {
                         fprintf(stderr,
                             "Cannot have spaces between >\n");
-                        free_tokens(head);;
-                        return NULL;
+                        free_tok_list(tlist);;
+                        return;
                     }
                 } else if (ch == ' ') {
                 } else if (32 <= ch && ch <= 127) {
                     State = Letter_State;
                     token[j] = '\0';
-                    save_string(token, &head, true);
+                    save_string(token, &tlist, true);
                     token[0] = ch;
                     j = 1;
                 } else {
                     fprintf(stderr, "Unrecognized character %c\n", ch);
-                    free_tokens(head);;
-                    return NULL;
+                    free_tok_list(tlist);;
+                    return;
                 }
                 break;
             /** everything is treated as plaintext until
@@ -190,13 +192,13 @@ tok_node* tokenize (char *input)
                     } else if (ch == '<' || ch == '>' || ch == '|') {
                         State = Redirect_State;
                         token[j] = '\0';
-                        save_string(token, &head, false);
+                        save_string(token, &tlist, false);
                         token[0] = ch;
                         j = 1;
                     } else if (ch == ' ') {
                         State = Blank_State;
                         token[j] = '\0';
-                        save_string(token, &head, false);
+                        save_string(token, &tlist, false);
                         j = 0;
                     } else if (32 <= ch && ch <= 127) {
                         State = Letter_State;
@@ -204,16 +206,16 @@ tok_node* tokenize (char *input)
                         j++;
                     } else if (ch == '\n') {
                         token[j] = '\0';
-                        save_string(token, &head, false);
+                        save_string(token, &tlist, false);
                     } else {
                         fprintf(stderr, "Unrecognized character %c\n", ch);
-                        free_tokens(head);;
-                        return NULL;
+                        free_tok_list(tlist);;
+                        return;
                     }
                 } else if (ch == '\n') {
                     fprintf(stderr, "Quote never closed \'\n");
-                    free_tokens(head);;
-                    return NULL;
+                    free_tok_list(tlist);;
+                    return;
                 } else if (ch == '\\') { // handle escaped characters
                     i++;
                     char ec = input[i];
@@ -249,13 +251,13 @@ tok_node* tokenize (char *input)
                     } else if (ch == '<' || ch == '>' || ch == '|') {
                         State = Redirect_State;
                         token[j] = '\0';
-                        save_string(token, &head, false);
+                        save_string(token, &tlist, false);
                         token[0] = ch;
                         j = 1;
                     } else if (ch == ' ') {
                         State = Blank_State;
                         token[j] = '\0';
-                        save_string(token, &head, false);
+                        save_string(token, &tlist, false);
                         j = 0;
                     } else if (32 <= ch && ch <= 127) {
                         State = Letter_State;
@@ -263,16 +265,16 @@ tok_node* tokenize (char *input)
                         j++;
                     } else if (ch == '\n') {
                         token[j] = '\0';
-                        save_string(token, &head, false);
+                        save_string(token, &tlist, false);
                     } else {
                         fprintf(stderr, "Unrecognized character %c\n", ch);
-                        free_tokens(head);;
-                        return NULL;
+                        free_tok_list(tlist);;
+                        return;
                     }
                 } else if (ch == '\n') {
                     fprintf(stderr, "Quote never closed \"\n");
-                    free_tokens(head);;
-                    return NULL;
+                    free_tok_list(tlist);;
+                    return;
                 } else if (ch == '\\') { // handle escaped characters
                     i++;
                     char ec = input[i];
@@ -301,16 +303,15 @@ tok_node* tokenize (char *input)
                 break;
         }
     }
-    return head;
+    return;
 }
 
 /**
  * Inserts a new node at the end of the linked list pointed to by head
  * with the given string token and marks whether it is a special
  * token or not based on spec */
-static void save_string (char *token, tok_node **head, bool spec)
+static void save_string (char *token, struct tok_list **tlist, bool spec)
 {
-    tok_node *list = *head;
     tok_node *t_node = malloc(sizeof(tok_node)); // make new node
     int length = strlen(token);
     if (t_node == NULL) {
@@ -327,30 +328,33 @@ static void save_string (char *token, tok_node **head, bool spec)
     t_node->special = spec; // set if token is special
     t_node->next = NULL; // set next to NULL, node is going at the end
 
-    if (*head == NULL) { // if head is NULL, new node is head
-        *head = t_node;
-        return;
+    if ((*tlist)->head == NULL) { // if head is NULL, new node is head
+        (*tlist)->head = t_node;
+        (*tlist)->tail = t_node;
+        (*tlist)->count = 1;
     } else { // otherwise insert node at the end
-        while (list->next != NULL) {
-            list = list->next;
-        }
-        list->next = t_node;
+        (*tlist)->tail->next = t_node;
+        (*tlist)->tail = t_node;
+        (*tlist)->count++;
     }
     return;
 }
 
 /**
- * call to free all tokens and linked list
+ * call to free all nodes
  */
-void free_tokens (tok_node *head)
+void free_tok_list (struct tok_list *tlist)
 {
-    tok_node *temp = head;
+    tok_node *temp = tlist->head;
     while (temp != NULL) {
-        head = head->next;
+        tlist->head = tlist->head->next;
         free(temp->token);
         free(temp);
-        temp = head;
+        temp = tlist->head;
     }
+    tlist->head = NULL;
+    tlist->tail = NULL;
+    tlist->count = 0;
     return;
 }
 
