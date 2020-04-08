@@ -173,8 +173,16 @@ static void parse_cmd (struct subsection cmd_ll)
         curr = curr->next;
     }
 
+    /* run commands locally if they start with ./ or / */
+    if (cmd[0][0] == '/') {
+        cmd[0] = cmd[0] + 1;
+        execv(cmd[0], cmd);
+    } else if (cmd[0][0] == '.') {
+        if (cmd[0][1] == '/') {
+            execv(cmd[0], cmd);
+        }
     /* if the cmd is a bin in the path, execute */
-    if (bin_exists(cmd[0])) {
+    } else if (bin_exists(cmd[0])) {
         execvp(cmd[0], cmd);
     } else {
         fprintf(stderr, "command %s does not exist", cmd[0]);
