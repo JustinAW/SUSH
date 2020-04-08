@@ -3,11 +3,14 @@
  *                   sush.c                     *
  ************************************************
  * Linux shell command interpreter.             *
- * For now just reads a .sushrc file and prints *
- *  to stdout                                   *
+ * Reads a .sushrc file from the user's home    *
+ * directory and execs it line by line if it is *
+ * executable, then waits for user input to     *
+ * tokenize and run commands                    *
  ************************************************
  * Author: Justin Weigle                        *
- * Edited: 11 Mar 2020                          *
+ *         Richard Bucco                        *
+ * Edited: 07 Apr 2020                          *
  ************************************************/
 #include <stdio.h>
 #include <stdlib.h>
