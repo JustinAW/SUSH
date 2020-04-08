@@ -1,7 +1,7 @@
 CC= gcc
 CFLAGS= -g -Wall
 TARGET= sush
-OBJS= sush.o modules/tokenizer.o modules/rcreader.o
+OBJS= sush.o modules/tokenizer.o modules/rcreader.o modules/executor.o modules/internal.o
 
 all: $(TARGET)
 

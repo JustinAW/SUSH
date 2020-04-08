@@ -7,17 +7,15 @@
  * further be used to execute shell commands    *
  ************************************************
  * Author: Justin Weigle                        *
- * Edited: 06 Apr 2020                          *
+ *         Richard Bucco                        *
+ * Edited: 07 Apr 2020                          *
  ************************************************/
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdarg.h>
 #include <stdbool.h>
-#include <sys/time.h>
 #include <sys/resource.h>
-#include "../includes/sush.h"
 #include "../includes/tokenizer.h"
 
 typedef enum {
@@ -44,7 +42,6 @@ void tokenize (struct tok_list *tlist, char *input)
     }
 
     char token[length];
-//    tok_node *head = NULL;
     char ch;
     Token_Sys_State State = Init_State;
 
@@ -370,31 +367,3 @@ void print_tokens (tok_node *head)
         list = list->next;
     }
 }
-
-/**
- * exemplifies how to use the tokenizer and then
- * free up the memory
- */
-//int main (int argc, char **argv)
-//{
-//    /* get user input */
-//    char userin[BUFF_SIZE];
-//    printf("Input something to be tokenized\n");
-//    fgets(userin, BUFF_SIZE, stdin);
-//
-//    /* get tokenized input */
-//    tok_node *tok_input;
-//    tok_input = tokenize(userin);
-//
-//    /* print the tokenized input */
-//    tok_node *list = tok_input;
-//    while (list != NULL) {
-//        printf("%s \t: %d\n", list->token, list->special);
-//        list = list->next;
-//    }
-//
-//    /* free the nodes */
-//    free_tokens(head);
-//
-//    return 0;
-//}

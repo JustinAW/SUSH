@@ -8,7 +8,8 @@
  * tokens to be passed to the executor          *
  ************************************************
  * Author: Justin Weigle                        *
- * Edited: 14 Mar 2020                          *
+ *         Richard Bucco                        *
+ * Edited: 07 Apr 2020                          *
  ************************************************/
 
 #include <stdio.h>
@@ -16,10 +17,13 @@
 #include <string.h>
 #include <unistd.h>
 #include <dirent.h>
-#include <sys/types.h>
+#include <stdbool.h>
+#include <sys/resource.h>
 #include "../includes/sush.h"
 #include "../includes/tokenizer.h"
 #include "../includes/rcreader.h"
+#include "../includes/executor.h"
+#include "../includes/internal.h"
 
 /**
  * Opens the user's home directory using the $HOME environment
@@ -28,6 +32,11 @@
  */
 void read_sushrc ()
 {
+    struct tok_list tlist;
+    tlist.head = NULL;
+    tlist.tail = NULL;
+    tlist.count = 0;
+
     /* set path to home and .sushrc */
     const char *home = getenv("HOME");
     // strcat cuts off \0 bit from *dest, need a temp
@@ -41,7 +50,6 @@ void read_sushrc ()
     DIR *dir;
     struct dirent *entry;
     int found = 0;
-    int length = 0;
     if ((dir = opendir(home)) != NULL) {
         while ((entry = readdir(dir)) != NULL) {
             if (!strcmp(entry->d_name, ".sushrc")) {
@@ -52,21 +60,17 @@ void read_sushrc ()
                     FILE *fp = fopen(rcfile, "r");
                     // read file until EOF is found (fgets() returns NULL)
                     while ((fgets(buf, BUFF_SIZE, fp)) != NULL) {
-                        length = strlen(buf);
-                        if (length == 1024) {
-                            if (buf[length-1] == '\n') {
-                                tok_node *head = tokenize(buf);
-                                // TODO call executor here
-                                free_tokens(head);
+                        tokenize(&tlist, buf);
+                        if (tlist.head) {
+                            int ret = run_internal_cmd(&tlist);
+                            if (ret < 0) {
+                                fprintf(stderr, "unable to run internal command\n");
+                            } else if (ret == 0) {
                             } else {
-                                while (fgetc(fp) != '\n') { }
-                                fprintf(stderr, "maxlen 1023, skipping...\n");
+                                execute(tlist.head);
                             }
-                        } else {
-                            tok_node *head = tokenize(buf);
-                            // TODO call executor here
-                            free_tokens(head);
                         }
+                        free_tok_list(&tlist);
                     }
                     fclose(fp); // close the file
                 } else {

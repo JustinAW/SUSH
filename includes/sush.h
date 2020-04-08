@@ -12,4 +12,6 @@ enum RMANAGE {
 
 void manage_rusage (enum RMANAGE, struct rusage);
 
+void show_all_resources ();
+
 #endif

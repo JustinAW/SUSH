@@ -1,20 +1,33 @@
+/************************************************
+ *       Shippensburg University Shell          *
+ *                 internal.c                   *
+ ************************************************
+ * Handles internal commands for SUSH           *
+ ************************************************
+ * Author: Justin Weigle                        *
+ *         Richard Bucco                        *
+ * Edited: 07 Apr 2020                          *
+ ************************************************/
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
 #include <unistd.h>
-#include <sys/time.h>
 #include <sys/resource.h>
 #include "../includes/sush.h"
 #include "../includes/tokenizer.h"
 #include "../includes/internal.h"
-#include "../includes/executor.h"
 
 static bool del_env_var (struct tok_list *);
 static bool set_env_var (struct tok_list *);
 static bool change_directory (struct tok_list *);
 static bool print_wdirectory ();
 
+/**
+ * Runs a given internal command as long as it's
+ * valid
+ */
 int run_internal_cmd (struct tok_list *tlist) {
     bool found_internal_cmd = false;
     bool err_found = false;
