@@ -9,15 +9,13 @@
  * Edited: 07 Apr 2020                          *
  ************************************************/
 
+#include "../includes/internal.h"
+#include "../includes/sush.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
 #include <unistd.h>
-#include <sys/resource.h>
-#include "../includes/sush.h"
-#include "../includes/tokenizer.h"
-#include "../includes/internal.h"
 
 static bool del_env_var (struct tok_list *);
 static bool set_env_var (struct tok_list *);

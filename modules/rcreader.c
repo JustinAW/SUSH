@@ -12,6 +12,10 @@
  * Edited: 07 Apr 2020                          *
  ************************************************/
 
+#include "../includes/rcreader.h"
+#include "../includes/sush.h"
+#include "../includes/executor.h"
+#include "../includes/internal.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -19,11 +23,6 @@
 #include <dirent.h>
 #include <stdbool.h>
 #include <sys/resource.h>
-#include "../includes/sush.h"
-#include "../includes/tokenizer.h"
-#include "../includes/rcreader.h"
-#include "../includes/executor.h"
-#include "../includes/internal.h"
 
 /**
  * Opens the user's home directory using the $HOME environment

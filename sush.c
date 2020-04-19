@@ -9,17 +9,18 @@
  * Author: Justin Weigle                        *
  * Edited: 11 Mar 2020                          *
  ************************************************/
+
+#include "includes/sush.h"
+#include "includes/tokenizer.h"
+#include "includes/executor.h"
+#include "includes/internal.h"
+#include "includes/rcreader.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
 #include <signal.h>
 #include <sys/time.h>
 #include <sys/resource.h>
-#include "includes/tokenizer.h"
-#include "includes/executor.h"
-#include "includes/internal.h"
-#include "includes/rcreader.h"
-#include "includes/sush.h"
 
 static void print_resources (struct rusage);
 static void show_resources (int);

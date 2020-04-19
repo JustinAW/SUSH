@@ -10,6 +10,8 @@
  * Edited: 07 Apr 2020                          *
  ************************************************/
 
+#include "../includes/executor.h"
+#include "../includes/sush.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -18,10 +20,6 @@
 #include <dirent.h>
 #include <fcntl.h>
 #include <sys/wait.h>
-#include <sys/resource.h>
-#include "../includes/sush.h"
-#include "../includes/tokenizer.h"
-#include "../includes/executor.h"
 
 typedef struct path_node {
     char *path;

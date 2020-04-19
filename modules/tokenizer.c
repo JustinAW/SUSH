@@ -11,12 +11,11 @@
  * Edited: 07 Apr 2020                          *
  ************************************************/
 
+#include "../includes/tokenizer.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdbool.h>
 #include <sys/resource.h>
-#include "../includes/tokenizer.h"
 
 typedef enum {
     Init_State,

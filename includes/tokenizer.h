@@ -1,6 +1,8 @@
 #ifndef TOKENIZER_H
 #define TOKENIZER_H
 
+#include <stdbool.h>
+
 typedef struct tok_node {
     char *token;
     bool special;

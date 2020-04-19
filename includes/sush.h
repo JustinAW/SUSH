@@ -5,6 +5,8 @@
 #define BUFF_SIZE 1025
 #endif
 
+#include <sys/resource.h>
+
 enum RMANAGE {
     UPDATE,
     PRINT
