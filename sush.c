@@ -10,7 +10,7 @@
  ************************************************
  * Author: Justin Weigle                        *
  *         Richard Bucco                        *
- * Edited: 07 Apr 2020                          *
+ * Edited: 19 Apr 2020                          *
  ************************************************/
 
 #include "includes/sush.h"
