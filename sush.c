@@ -42,6 +42,7 @@ int main (int argc, char **argv)
     tlist.head = NULL;
     tlist.tail = NULL;
     tlist.count = 0;
+    tlist.pcount = 0;
 
     char userin[BUFF_SIZE];
     while (!feof(stdin)) {
@@ -51,12 +52,13 @@ int main (int argc, char **argv)
         } else {
             printf("%s", PS1);
         }
+
+        /* get user input */
         if (fgets(userin, BUFF_SIZE, stdin) == NULL) {
-            perror("failed to get user input");
             exit(0);
         }
 
-        /* get tokenized input */
+        /* tokenize the input */
         tokenize(&tlist, userin);
 
         /* print the tokenized input */
@@ -67,9 +69,8 @@ int main (int argc, char **argv)
             int ret = run_internal_cmd(&tlist);
             if (ret < 0) {
                 fprintf(stderr,"Unable to run internal command\n");
-            } else if (ret == 0) {
-            } else {
-                execute(tlist.head);
+            } else if (ret > 0) { // wasn't an internal command
+                execute(&tlist);
             }
         }
 

@@ -3,6 +3,6 @@
 
 #include "tokenizer.h"
 
-void execute (tok_node *);
+void execute (struct tok_list *);
 
 #endif

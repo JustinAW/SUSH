@@ -327,11 +327,13 @@ static void save_string (char *token, struct tok_list **tlist, bool spec)
     if ((*tlist)->head == NULL) { // if head is NULL, new node is head
         (*tlist)->head = t_node;
         (*tlist)->tail = t_node;
-        (*tlist)->count = 1;
     } else { // otherwise insert node at the end
         (*tlist)->tail->next = t_node;
         (*tlist)->tail = t_node;
-        (*tlist)->count++;
+    }
+    (*tlist)->count++; // another token
+    if (!strcmp(token, "|") && spec) {
+        (*tlist)->pcount++; // an actual pipe
     }
     return;
 }
@@ -351,6 +353,7 @@ void free_tok_list (struct tok_list *tlist)
     tlist->head = NULL;
     tlist->tail = NULL;
     tlist->count = 0;
+    tlist->pcount = 0;
     return;
 }
 

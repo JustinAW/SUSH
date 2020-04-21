@@ -13,6 +13,7 @@ struct tok_list {
     tok_node *head;
     tok_node *tail;
     int count;
+    int pcount;
 };
 
 void free_tok_list (struct tok_list*);

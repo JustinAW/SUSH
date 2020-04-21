@@ -66,7 +66,7 @@ void read_sushrc ()
                                 fprintf(stderr, "unable to run internal command\n");
                             } else if (ret == 0) {
                             } else {
-                                execute(tlist.head);
+                                execute(&tlist);
                             }
                         }
                         free_tok_list(&tlist);

@@ -26,6 +26,12 @@ typedef struct path_node {
     struct path_node *next;
 } path_node;
 
+struct p_list {
+    path_node *head;
+    path_node *tail;
+    int count;
+};
+
 struct subsection {
     tok_node *head;
     tok_node *tail;
@@ -37,33 +43,31 @@ enum Read_Write {
     WRITE
 };
 
-static void parse_cmd (struct subsection);
+static void parse_cmd (struct subsection, struct p_list);
 static struct subsection get_next_subsection (tok_node *);
-static bool bin_exists (char *);
-static void count_pipes (tok_node *, int *);
+static bool bin_exists (char *, struct p_list);
 static int get_fd (char *, enum Read_Write, bool);
 static void output_to_file (char *, bool);
 static void file_to_input (char *);
-static path_node* get_path();
-static void save_path(char *, path_node **);
-static void free_path (path_node *);
+static struct p_list get_path();
+static void save_path(char *, struct p_list *);
+static void free_path (struct p_list *);
 
 /**
  * Counts how many pipes there are in the given linked list of tokens and
  * forks() a process for each command and pipes between them as necessary
  */
-void execute (tok_node *head)
+void execute (struct tok_list *tlist)
 {
-    /* find number of pipes in linked list */
-    int pipe_ct = 0;
-    count_pipes(head, &pipe_ct);
+    int pipe_ct = tlist->pcount;
+    /* number of pipes+1 is number of processes to fork() */
     int cmd_ct = pipe_ct + 1;
 
     /* allocate storage for the cmd(s) */
     struct subsection cmds[cmd_ct];
 
     /* split input into separate cmds if pipe(s) */
-    tok_node *curr = head;
+    tok_node *curr = tlist->head;
     for (int i = 0; i < cmd_ct; i++) {
         cmds[i] = get_next_subsection(curr);
         curr = cmds[i].tail;
@@ -86,7 +90,11 @@ void execute (tok_node *head)
     int status;
     pid_t pid;
 
+    /* rusage struct for each child process */
     struct rusage child_ruses[cmd_ct];
+
+    /* path for checking for binaries */
+    struct p_list plist = get_path();
 
     /* fork for every cmd in input */
     for (int i = 0; i < cmd_ct; i++) {
@@ -113,7 +121,7 @@ void execute (tok_node *head)
                 }
                 close(pipefd[i][1]); // close write end curr proc pipe
             }
-            parse_cmd(cmds[i]); // parse and exec curr command
+            parse_cmd(cmds[i], plist); // parse and exec curr command
             perror("exec failed"); // if parse_cmd returns, error
             exit(-1);
         } else { // parent
@@ -126,9 +134,14 @@ void execute (tok_node *head)
         }
     }
 
+    /* store the rusage info from each child into the "global"
+     * SUSH rusage struct */
     for (int i = 0; i < cmd_ct; i++) {
         manage_rusage(UPDATE, child_ruses[i]);
     }
+
+    /* free memory allocated for path */
+    free_path(&plist);
 
     return;
 }
@@ -137,7 +150,7 @@ void execute (tok_node *head)
  * Takes a single command and parses it to find any redirects, then
  * executes the command
  */
-static void parse_cmd (struct subsection cmd_ll)
+static void parse_cmd (struct subsection cmd_ll, struct p_list plist)
 {
     /* allocate strings for each token plus room for a NULL */
     char *cmd[cmd_ll.count +1];
@@ -145,7 +158,7 @@ static void parse_cmd (struct subsection cmd_ll)
     tok_node *curr = cmd_ll.head;
     int i = 0;
     /* build command. stop at first redirect or end */
-    while ((curr != NULL)  && !(curr->special)) {
+    while ((curr != NULL) && !(curr->special)) {
         cmd[i++] = curr->token;
         curr = curr->next;
     }
@@ -153,7 +166,7 @@ static void parse_cmd (struct subsection cmd_ll)
 
     curr = cmd_ll.head;
     /* stop when curr is whatever is right after the tail of the command */
-    while (curr != cmd_ll.tail->next) {
+    while (curr != NULL && curr != cmd_ll.tail->next) {
         if (curr->special) {
             if (!strcmp(curr->token, ">")) {
                 /* next token should be output file, append false */
@@ -180,7 +193,7 @@ static void parse_cmd (struct subsection cmd_ll)
             execv(cmd[0], cmd);
         }
     /* if the cmd is a bin in the path, execute */
-    } else if (bin_exists(cmd[0])) {
+    } else if (bin_exists(cmd[0], plist)) {
         execvp(cmd[0], cmd);
     } else {
         fprintf(stderr, "command %s does not exist", cmd[0]);
@@ -223,15 +236,12 @@ static struct subsection get_next_subsection (tok_node *curr)
 /**
  * checks the path environment variable to see if bin is in it
  */
-static bool bin_exists (char *bin)
+static bool bin_exists (char *bin, struct p_list plist)
 {
-    /* get path in form of linked list */
-    path_node *phead = get_path();
-
     bool found = false;
     DIR *dir;
     struct dirent *entry;
-    path_node *list = phead;
+    path_node *list = plist.head;
 
     /* search path to see if the given string bin is in the directories */
     while (list != NULL && found == false) {
@@ -245,23 +255,7 @@ static bool bin_exists (char *bin)
         list = list->next;
     }
     closedir(dir);
-    free_path(phead);
     return found;
-}
-
-/**
- * count total pipes in a given tok_node linked list
- */
-static void count_pipes (tok_node *head, int *pipe_ct)
-{
-    while (head != NULL) {
-        if (head->special) {
-            if (!strcmp(head->token, "|")) {
-                (*pipe_ct)++;
-            }
-        }
-        head = head->next;
-    }
 }
 
 /**
@@ -318,34 +312,36 @@ static void file_to_input (char *fname)
  * gets the user's path environment variable and returns it
  * as a linked list
  */
-static path_node* get_path()
+static struct p_list get_path()
 {
     char *fpath = getenv("PATH"); // get path
     int length = strlen(fpath);
     char path[length]; // make buffer to store individual path strings
-    path_node *phead = NULL;
+    struct p_list plist;
+    plist.head = NULL;
+    plist.tail = NULL;
+    plist.count = 0;
 
     /* go through full path(fpath) searching for colons, which are the
      * delimiters of the path environment variable */
     for (int i = 0, j = 0; i < length; i++) {
         if (fpath[i] == ':') {
             path[j] = '\0';
-            save_path(path, &phead);
+            save_path(path, &plist);
             j = 0;
         } else {
             path[j++] = fpath[i];
         }
     }
 
-    return phead;
+    return plist;
 }
 
 /**
  * saves a path into a path_node linked list
  */
-static void save_path(char *path, path_node **phead)
+static void save_path(char *path, struct p_list *plist)
 {
-    path_node *list = *phead;
     path_node *p_node = malloc(sizeof(path_node)); // make new node
     if (p_node == NULL) {
         perror("malloc failed in save_path()");
@@ -359,28 +355,31 @@ static void save_path(char *path, path_node **phead)
     p_node->path[length] = '\0'; // in case strncpy doesn't null terminate
     p_node->next = NULL; // set next to NULL, node is going at the end
 
-    if (*phead == NULL) { // if phead is NULL, new node is phead
-        *phead = p_node;
+    if (plist->head == NULL) { // if phead is NULL, new node is phead
+        plist->head = p_node;
+        plist->tail = p_node;
         return;
     } else { // otherwise insert node at the end
-        while (list->next != NULL) {
-            list = list->next;
-        }
-        list->next = p_node;
+        plist->tail->next = p_node;
+        plist->tail = p_node;
     }
+    plist->count++; // another node
     return;
 }
 
 /**
  * takes a path linked list and frees it
  */
-static void free_path (path_node *phead)
+static void free_path (struct p_list *plist)
 {
-    path_node *list = phead;
-    while (list != NULL) {
-        phead = phead->next;
-        free(list->path);
-        free(list);
-        list = phead;
+    path_node *temp = plist->head;
+    while (temp != NULL) {
+        plist->head = plist->head->next;
+        free(temp->path);
+        free(temp);
+        temp = plist->head;
     }
+    plist->head = NULL;
+    plist->tail = NULL;
+    plist->count = 0;
 }
